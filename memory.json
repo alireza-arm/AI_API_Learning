@@ -1,0 +1,255 @@
+[
+    {
+        "memory": "User is a mechanical engineering student.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-09-22T12:31:04.594636+00:00",
+        "updated_at": "2026-09-23T21:58:16.777131+00:00",
+        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
+        "access_count": 7,
+        "status": "active",
+        "memory_id": "61ceed2a-8915-47c8-8542-408182b70478",
+        "chain_id": "f9fc41c6-64fa-47d0-a837-0e487178d03b",
+        "version": 1,
+        "valid_from": "2026-09-22T12:31:04.594636+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-22T12:31:04.594756+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly stated their current educational status.",
+                "source_text": "I am a mechanical engineering student.",
+                "related_memory_ids": []
+            }
+        ],
+        "causal_links": []
+    },
+    {
+        "memory": "User is learning Python.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.9,
+        "created_at": "2026-09-22T12:31:28.908659+00:00",
+        "updated_at": "2026-09-22T12:31:28.908659+00:00",
+        "last_accessed": "2026-09-22T12:31:28.908659+00:00",
+        "access_count": 0,
+        "status": "active",
+        "memory_id": "28487f7d-41d4-447e-9fdd-73f49e8c79f5",
+        "chain_id": "7423d113-dbc2-4b21-af4c-889ee0da7d58",
+        "version": 1,
+        "valid_from": "2026-09-22T12:31:28.908659+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-22T12:31:28.908832+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly states they are learning Python.",
+                "source_text": "I am learning Python.",
+                "related_memory_ids": []
+            }
+        ],
+        "causal_links": []
+    },
+    {
+        "memory": "User uses SolidWorks for mechanical design.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-09-22T12:32:51.223592+00:00",
+        "updated_at": "2026-09-23T21:58:16.777131+00:00",
+        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
+        "access_count": 5,
+        "status": "active",
+        "memory_id": "2c22da24-d998-4b38-8720-ba407c02c6d1",
+        "chain_id": "f7b0823d-23cd-47b5-94c7-53acefa0a58e",
+        "version": 1,
+        "valid_from": "2026-09-22T12:32:51.223592+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-22T12:32:51.223660+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly stated they use SolidWorks for mechanical design.",
+                "source_text": "I use SolidWorks for mechanical design.",
+                "related_memory_ids": []
+            }
+        ],
+        "causal_links": []
+    },
+    {
+        "memory": "User started working on Project Atlas.",
+        "type": "project",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-09-23T21:50:29.741395+00:00",
+        "updated_at": "2026-09-23T21:57:37.891541+00:00",
+        "last_accessed": "2026-09-23T21:57:33.040869+00:00",
+        "access_count": 4,
+        "status": "active",
+        "memory_id": "a7d59355-09b0-488f-bd27-b879dae69e11",
+        "chain_id": "67650d9b-7b9d-4a02-8601-436778e27e2b",
+        "version": 1,
+        "valid_from": "2026-09-23T21:50:29.741395+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:50:29.741572+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly stated they began working on Project Atlas on 2026-01-10.",
+                "source_text": "I started working on Project Atlas on 2026-01-10.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-09-23T21:57:37.860414+00:00",
+                "action": "CAUSAL_LINK",
+                "event": "NONE",
+                "reason": "causal_relation:CAUSES",
+                "source_text": "because Project Atlas requires finite element analysis",
+                "related_memory_ids": [
+                    "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd"
+                ]
+            },
+            {
+                "timestamp": "2026-09-23T21:57:37.893621+00:00",
+                "action": "CAUSAL_LINK",
+                "event": "NONE",
+                "reason": "causal_relation:CAUSES",
+                "source_text": "because Project Atlas requires finite element analysis",
+                "related_memory_ids": [
+                    "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd"
+                ]
+            }
+        ],
+        "causal_links": [
+            {
+                "target_memory_id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+                "relation": "CAUSES",
+                "confidence": 0.95,
+                "evidence": "because Project Atlas requires finite element analysis",
+                "timestamp": "2026-09-23T21:57:37.891530+00:00"
+            }
+        ]
+    },
+    {
+        "memory": "User uses Abaqus for Project Atlas.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-09-23T21:51:25.957226+00:00",
+        "updated_at": "2026-09-23T21:58:16.777131+00:00",
+        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
+        "access_count": 4,
+        "status": "active",
+        "memory_id": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+        "chain_id": "a609bd7f-ac84-4464-9d3e-c4c1b3b230e2",
+        "version": 1,
+        "valid_from": "2026-09-23T21:56:28.712920+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [
+            "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e"
+        ],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:56:28.713097+00:00",
+                "action": "CONSOLIDATE",
+                "event": "CHANGE",
+                "reason": "User indicated they started using Abaqus for Project Atlas on 2026-09-21.",
+                "source_text": "Since 2026-09-21, I have been using Abaqus for Project Atlas.",
+                "related_memory_ids": [
+                    "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e"
+                ]
+            }
+        ],
+        "causal_links": []
+    },
+    {
+        "memory": "User started learning Abaqus.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.93,
+        "created_at": "2026-09-23T21:57:37.794254+00:00",
+        "updated_at": "2026-09-23T21:58:16.777131+00:00",
+        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
+        "access_count": 1,
+        "status": "active",
+        "memory_id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+        "chain_id": "e76ae6f2-f21b-4943-a198-ace7498ded55",
+        "version": 1,
+        "valid_from": "2026-09-23T21:57:37.794254+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:57:37.794411+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User indicated they began learning Abaqus.",
+                "source_text": "I started learning Abaqus because Project Atlas requires finite element analysis.",
+                "related_memory_ids": []
+            }
+        ],
+        "causal_links": []
+    },
+    {
+        "memory": "User uses Abaqus for finite element analysis in mechanical engineering projects.",
+        "type": "usage",
+        "importance": 5,
+        "confidence": 0.9,
+        "created_at": "2026-09-23T21:58:22.575062+00:00",
+        "updated_at": "2026-09-23T21:58:22.628573+00:00",
+        "last_accessed": "2026-09-23T21:58:22.575062+00:00",
+        "access_count": 0,
+        "status": "active",
+        "memory_id": "5090d7f9-f979-4211-9de4-139af9711428",
+        "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
+        "version": 2,
+        "valid_from": "2026-09-23T21:58:22.433615+00:00",
+        "valid_to": null,
+        "supersedes": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [
+            "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60"
+        ],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:58:22.575124+00:00",
+                "action": "UPDATE",
+                "event": "CHANGE",
+                "reason": "temporal_change",
+                "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
+                "related_memory_ids": [
+                    "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60"
+                ]
+            }
+        ],
+        "causal_links": []
+    }
+]

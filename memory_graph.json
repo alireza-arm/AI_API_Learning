@@ -1,0 +1,540 @@
+{
+  "schema_version": 2,
+  "updated_at": "2026-09-24T14:10:47.352841+00:00",
+  "nodes": [
+    {
+      "id": "ent_1bef59173bd6",
+      "kind": "entity",
+      "name": "mechanical engineering",
+      "canonical_name": "mechanical engineering",
+      "type": "DOMAIN",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "61ceed2a-8915-47c8-8542-408182b70478"
+      ],
+      "entity_chain_id": "ent_1bef59173bd6",
+      "version": 1,
+      "valid_from": "2026-09-22T12:31:04.594636+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.4626,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_2b1ac10b3e75",
+      "kind": "entity",
+      "name": "Project Atlas",
+      "canonical_name": "project atlas",
+      "type": "PROJECT",
+      "confidence": 0.9,
+      "mention_count": 4,
+      "memory_ids": [
+        "a7d59355-09b0-488f-bd27-b879dae69e11",
+        "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+        "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+        "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd"
+      ],
+      "entity_chain_id": "ent_2b1ac10b3e75",
+      "version": 1,
+      "valid_from": "2026-09-23T21:50:29.741395+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.6563,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_464c299b178c",
+      "kind": "entity",
+      "name": "finite element analysis",
+      "canonical_name": "finite element analysis",
+      "type": "DOMAIN",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd"
+      ],
+      "entity_chain_id": "ent_464c299b178c",
+      "version": 1,
+      "valid_from": "2026-09-23T21:57:37.794254+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.566,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_586cc0d633a4",
+      "kind": "entity",
+      "name": "Abaqus",
+      "canonical_name": "abaqus",
+      "type": "SOFTWARE",
+      "confidence": 0.9,
+      "mention_count": 6,
+      "memory_ids": [
+        "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+        "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+        "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+        "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+        "5090d7f9-f979-4211-9de4-139af9711428"
+      ],
+      "entity_chain_id": "ent_586cc0d633a4",
+      "version": 1,
+      "valid_from": "2026-09-22T12:31:51.129472+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.6896,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_5ade0345e08e",
+      "kind": "entity",
+      "name": "Python",
+      "canonical_name": "python",
+      "type": "SOFTWARE",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "28487f7d-41d4-447e-9fdd-73f49e8c79f5"
+      ],
+      "entity_chain_id": "ent_5ade0345e08e",
+      "version": 1,
+      "valid_from": "2026-09-22T12:31:28.908659+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.4626,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_61fcc054c9da",
+      "kind": "entity",
+      "name": "Archive Test Project",
+      "canonical_name": "archive test project",
+      "type": "PROJECT",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd"
+      ],
+      "entity_chain_id": "ent_61fcc054c9da",
+      "version": 1,
+      "valid_from": "2026-09-23T22:11:55.537031+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.5675,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_7f66a1c22615",
+      "kind": "entity",
+      "name": "SolidWorks",
+      "canonical_name": "solidworks",
+      "type": "SOFTWARE",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "2c22da24-d998-4b38-8720-ba407c02c6d1"
+      ],
+      "entity_chain_id": "ent_7f66a1c22615",
+      "version": 1,
+      "valid_from": "2026-09-22T12:32:51.223592+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.4626,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "a7d59355-09b0-488f-bd27-b879dae69e11",
+      "kind": "memory",
+      "memory": "User started working on Project Atlas.",
+      "type": "project",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "67650d9b-7b9d-4a02-8601-436778e27e2b",
+      "version": 1,
+      "valid_from": "2026-09-23T21:50:29.741395+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "28487f7d-41d4-447e-9fdd-73f49e8c79f5",
+      "kind": "memory",
+      "memory": "User is learning Python.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.9,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "7423d113-dbc2-4b21-af4c-889ee0da7d58",
+      "version": 1,
+      "valid_from": "2026-09-22T12:31:28.908659+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "kind": "memory",
+      "memory": "User uses Abaqus for finite element analysis.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "archived",
+      "temporal_status": "historical",
+      "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
+      "version": 1,
+      "valid_from": "2026-09-23T21:42:48.895044+00:00",
+      "valid_to": "2026-09-23T21:58:22.433615+00:00"
+    },
+    {
+      "id": "5090d7f9-f979-4211-9de4-139af9711428",
+      "kind": "memory",
+      "memory": "User uses Abaqus for finite element analysis in mechanical engineering projects.",
+      "type": "usage",
+      "importance": 5,
+      "confidence": 0.9,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
+      "version": 2,
+      "valid_from": "2026-09-23T21:58:22.433615+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "kind": "memory",
+      "memory": "User uses Abaqus for Project Atlas.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "a609bd7f-ac84-4464-9d3e-c4c1b3b230e2",
+      "version": 1,
+      "valid_from": "2026-09-23T21:56:28.712920+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "kind": "memory",
+      "memory": "User uses Abaqus for Project Atlas.",
+      "type": "usage",
+      "importance": 5,
+      "confidence": 0.96,
+      "status": "archived",
+      "temporal_status": "historical",
+      "chain_id": "aca180ce-92fc-4f59-8d00-6b92be578606",
+      "version": 1,
+      "valid_from": "2026-09-23T21:51:25.957226+00:00",
+      "valid_to": "2026-09-23T21:56:28.712920+00:00"
+    },
+    {
+      "id": "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd",
+      "kind": "memory",
+      "memory": "User has a temporary test project called Archive Test Project.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.93,
+      "status": "archived",
+      "temporal_status": "current",
+      "chain_id": "be11e6e3-31d7-46ca-a83f-784c6638255a",
+      "version": 1,
+      "valid_from": "2026-09-23T22:11:55.537031+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "kind": "memory",
+      "memory": "User started learning Abaqus.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.93,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "e76ae6f2-f21b-4943-a198-ace7498ded55",
+      "version": 1,
+      "valid_from": "2026-09-23T21:57:37.794254+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "2c22da24-d998-4b38-8720-ba407c02c6d1",
+      "kind": "memory",
+      "memory": "User uses SolidWorks for mechanical design.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "f7b0823d-23cd-47b5-94c7-53acefa0a58e",
+      "version": 1,
+      "valid_from": "2026-09-22T12:32:51.223592+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "61ceed2a-8915-47c8-8542-408182b70478",
+      "kind": "memory",
+      "memory": "User is a mechanical engineering student.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "f9fc41c6-64fa-47d0-a837-0e487178d03b",
+      "version": 1,
+      "valid_from": "2026-09-22T12:31:04.594636+00:00",
+      "valid_to": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "5090d7f9-f979-4211-9de4-139af9711428",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "a7d59355-09b0-488f-bd27-b879dae69e11",
+      "target": "ent_2b1ac10b3e75",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "target": "ent_2b1ac10b3e75",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "target": "ent_2b1ac10b3e75",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "target": "ent_2b1ac10b3e75",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd",
+      "target": "ent_61fcc054c9da",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "target": "ent_464c299b178c",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "61ceed2a-8915-47c8-8542-408182b70478",
+      "target": "ent_1bef59173bd6",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "28487f7d-41d4-447e-9fdd-73f49e8c79f5",
+      "target": "ent_5ade0345e08e",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "2c22da24-d998-4b38-8720-ba407c02c6d1",
+      "target": "ent_7f66a1c22615",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "ent_586cc0d633a4",
+      "target": "ent_2b1ac10b3e75",
+      "type": "ENTITY_RELATION",
+      "relation": "USED_FOR",
+      "confidence": 0.9,
+      "evidence": "I have been using Abaqus for Project Atlas"
+    },
+    {
+      "source": "ent_2b1ac10b3e75",
+      "target": "ent_464c299b178c",
+      "type": "ENTITY_RELATION",
+      "relation": "REQUIRES",
+      "confidence": 0.95,
+      "evidence": "Project Atlas requires finite element analysis."
+    },
+    {
+      "source": "a7d59355-09b0-488f-bd27-b879dae69e11",
+      "target": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "type": "CAUSAL",
+      "relation": "CAUSES",
+      "confidence": 0.95,
+      "evidence": "because Project Atlas requires finite element analysis"
+    },
+    {
+      "source": "a7d59355-09b0-488f-bd27-b879dae69e11",
+      "target": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "causal_relation:CAUSES"
+    },
+    {
+      "source": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "target": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "target": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User indicated they started using Abaqus for Project Atlas on 2026-09-21."
+    },
+    {
+      "source": "5090d7f9-f979-4211-9de4-139af9711428",
+      "target": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDES",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "5090d7f9-f979-4211-9de4-139af9711428",
+      "target": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "5090d7f9-f979-4211-9de4-139af9711428",
+      "target": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "temporal_change"
+    },
+    {
+      "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "target": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "target": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User indicated they started using Abaqus for Project Atlas on 2026-09-21."
+    },
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "linked_to_new_version"
+    },
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "TEMPORAL_SAME_CHAIN",
+      "relation": "NEXT_VERSION",
+      "confidence": 1.0,
+      "evidence": "shared temporal chain"
+    }
+  ]
+}

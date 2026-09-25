@@ -1,0 +1,141 @@
+[
+    {
+        "memory": "User uses Abaqus for Project Atlas.",
+        "type": "usage",
+        "importance": 5,
+        "confidence": 0.96,
+        "created_at": "2026-09-23T21:51:25.957226+00:00",
+        "updated_at": "2026-09-23T21:56:28.712920+00:00",
+        "last_accessed": "2026-09-23T21:56:25.040822+00:00",
+        "access_count": 2,
+        "status": "archived",
+        "memory_id": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+        "chain_id": "aca180ce-92fc-4f59-8d00-6b92be578606",
+        "version": 1,
+        "valid_from": "2026-09-23T21:51:25.957226+00:00",
+        "valid_to": "2026-09-23T21:56:28.712920+00:00",
+        "supersedes": null,
+        "superseded_by": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+        "temporal_status": "historical",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:51:25.957332+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly stated they began using Abaqus for Project Atlas on 2026-06-01.",
+                "source_text": "Since 2026-06-01, I have been using Abaqus for Project Atlas.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-09-23T21:56:28.713163+00:00",
+                "action": "CONSOLIDATED_INTO",
+                "event": "CHANGE",
+                "reason": "User indicated they started using Abaqus for Project Atlas on 2026-09-21.",
+                "source_text": "Since 2026-09-21, I have been using Abaqus for Project Atlas.",
+                "related_memory_ids": [
+                    "385da6f2-d06a-456e-95fa-948f9ebf04a7"
+                ]
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-09-23T21:56:28.712920+00:00",
+        "archive_reason": "consolidated_into"
+    },
+    {
+        "memory": "User uses Abaqus for finite element analysis.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-09-22T12:31:51.129472+00:00",
+        "updated_at": "2026-09-23T21:58:22.629065+00:00",
+        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
+        "access_count": 8,
+        "status": "archived",
+        "memory_id": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+        "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
+        "version": 1,
+        "valid_from": "2026-09-23T21:42:48.895044+00:00",
+        "valid_to": "2026-09-23T21:58:22.433615+00:00",
+        "supersedes": null,
+        "superseded_by": "5090d7f9-f979-4211-9de4-139af9711428",
+        "temporal_status": "historical",
+        "derived_from": [
+            "5c66f64a-b514-4677-9384-4f70a8af180d"
+        ],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T21:42:48.895355+00:00",
+                "action": "CONSOLIDATE",
+                "event": "CHANGE",
+                "reason": "User explicitly states they use Abaqus FEA for structural analysis.",
+                "source_text": "من از Abaqus FEA برای تحلیل سازه استفاده می‌کنم.",
+                "related_memory_ids": [
+                    "5c66f64a-b514-4677-9384-4f70a8af180d"
+                ]
+            },
+            {
+                "timestamp": "2026-09-23T21:58:22.434576+00:00",
+                "action": "SUPERSEDE",
+                "event": "CHANGE",
+                "reason": "conflict_replaced",
+                "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-09-23T21:58:22.629049+00:00",
+                "action": "SUPERSEDED_BY",
+                "event": "CHANGE",
+                "reason": "linked_to_new_version",
+                "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
+                "related_memory_ids": [
+                    "5090d7f9-f979-4211-9de4-139af9711428"
+                ]
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-09-23T21:58:22.434560+00:00",
+        "archive_reason": "conflict_replaced"
+    },
+    {
+        "memory": "User has a temporary test project called Archive Test Project.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.93,
+        "created_at": "2026-09-23T22:11:55.537031+00:00",
+        "updated_at": "2026-09-23T22:12:21.101034+00:00",
+        "last_accessed": "2026-09-23T22:12:19.716807+00:00",
+        "access_count": 1,
+        "status": "archived",
+        "memory_id": "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd",
+        "chain_id": "be11e6e3-31d7-46ca-a83f-784c6638255a",
+        "version": 1,
+        "valid_from": "2026-09-23T22:11:55.537031+00:00",
+        "valid_to": null,
+        "supersedes": null,
+        "superseded_by": null,
+        "temporal_status": "current",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-09-23T22:11:55.537115+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User explicitly stated the existence of a temporary test project named Archive Test Project.",
+                "source_text": "I have a temporary test project called Archive Test Project.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-09-23T22:12:21.101085+00:00",
+                "action": "DELETE",
+                "event": "NONE",
+                "reason": "manual_delete_request",
+                "source_text": "Forget my temporary Archive Test Project because I no longer use it.",
+                "related_memory_ids": []
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-09-23T22:12:21.101034+00:00",
+        "archive_reason": "manual_delete_request"
+    }
+]

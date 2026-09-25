@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-23T21:58:26.551768+00:00",
+  "resolutions": [
+    {
+      "resolution_id": "ers_df366edeef78",
+      "candidate_name": "Abaqus FEA",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "normalized_core_match",
+      "action": "LINK",
+      "source_text": "من از Abaqus FEA برای تحلیل سازه استفاده می‌کنم.",
+      "memory_id": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "timestamp": "2026-09-23T21:42:49.959737+00:00"
+    },
+    {
+      "resolution_id": "ers_49d83a3f0254",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "Since 2026-06-01, I have been using Abaqus for Project Atlas.",
+      "memory_id": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "timestamp": "2026-09-23T21:51:27.208170+00:00"
+    },
+    {
+      "resolution_id": "ers_1f1778eb180e",
+      "candidate_name": "Project Atlas",
+      "entity_id": "ent_2b1ac10b3e75",
+      "entity_name": "Project Atlas",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "Since 2026-06-01, I have been using Abaqus for Project Atlas.",
+      "memory_id": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+      "timestamp": "2026-09-23T21:51:27.291957+00:00"
+    },
+    {
+      "resolution_id": "ers_f4edc63a262b",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "Since 2026-09-21, I have been using Abaqus for Project Atlas.",
+      "memory_id": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "timestamp": "2026-09-23T21:56:29.568212+00:00"
+    },
+    {
+      "resolution_id": "ers_bde7efa3043d",
+      "candidate_name": "Project Atlas",
+      "entity_id": "ent_2b1ac10b3e75",
+      "entity_name": "Project Atlas",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "Since 2026-09-21, I have been using Abaqus for Project Atlas.",
+      "memory_id": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+      "timestamp": "2026-09-23T21:56:29.637008+00:00"
+    },
+    {
+      "resolution_id": "ers_11f257f4e675",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "I started learning Abaqus because Project Atlas requires finite element analysis.",
+      "memory_id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "timestamp": "2026-09-23T21:57:39.340585+00:00"
+    },
+    {
+      "resolution_id": "ers_bbce4089bbb5",
+      "candidate_name": "Project Atlas",
+      "entity_id": "ent_2b1ac10b3e75",
+      "entity_name": "Project Atlas",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "I started learning Abaqus because Project Atlas requires finite element analysis.",
+      "memory_id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+      "timestamp": "2026-09-23T21:57:39.412138+00:00"
+    },
+    {
+      "resolution_id": "ers_62accd02007a",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "semantic_identity_match",
+      "action": "LINK",
+      "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
+      "memory_id": "5090d7f9-f979-4211-9de4-139af9711428",
+      "timestamp": "2026-09-23T21:58:26.551725+00:00"
+    }
+  ]
+}

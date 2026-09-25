@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-09-23T21:57:40.987899+00:00",
+  "relations": [
+    {
+      "relation_id": "rel_0ed52276c86192de",
+      "source_entity_id": "ent_586cc0d633a4",
+      "target_entity_id": "ent_2b1ac10b3e75",
+      "relation": "USED_FOR",
+      "directed": true,
+      "confidence": 0.9,
+      "evidence": "I have been using Abaqus for Project Atlas",
+      "memory_ids": [],
+      "status": "active",
+      "created_at": "2026-09-23T21:51:28.720082+00:00",
+      "updated_at": "2026-09-23T21:56:30.938098+00:00"
+    },
+    {
+      "relation_id": "rel_c23a805ae718e242",
+      "source_entity_id": "ent_2b1ac10b3e75",
+      "target_entity_id": "ent_464c299b178c",
+      "relation": "REQUIRES",
+      "directed": true,
+      "confidence": 0.95,
+      "evidence": "Project Atlas requires finite element analysis.",
+      "memory_ids": [],
+      "status": "active",
+      "created_at": "2026-09-23T21:57:40.945573+00:00",
+      "updated_at": "2026-09-23T21:57:40.987863+00:00"
+    }
+  ]
+}
