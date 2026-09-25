@@ -497,14 +497,24 @@ class TrustedAttestationKeyRegistry:
             consumed_events = [
                 record
                 for record in audit_records
-                if str(record.get("event_type", "") or "") == "CONSUMPTION_AUDIT_EVIDENCE_ATTESTATION_CONSUMED"
-                or str(record.get("event_type", "") or "") == "DECISION_ATTESTATION_CONSUMED"
+                if str(record.get("event_type", "") or "") in {
+                    "CONSUMPTION_AUDIT_EVIDENCE_ATTESTATION_CONSUMED",
+                    "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED",
+                    "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED",
+                    "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMED",
+                    "DECISION_ATTESTATION_CONSUMED",
+                }
             ]
             replay_events = [
                 record
                 for record in audit_records
-                if str(record.get("event_type", "") or "") == "CONSUMPTION_AUDIT_EVIDENCE_ATTESTATION_REPLAY_REJECTED"
-                or str(record.get("event_type", "") or "") == "DECISION_ATTESTATION_REPLAY_REJECTED"
+                if str(record.get("event_type", "") or "") in {
+                    "CONSUMPTION_AUDIT_EVIDENCE_ATTESTATION_REPLAY_REJECTED",
+                    "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAY_REJECTED",
+                    "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAY_REJECTED",
+                    "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAY_REJECTED",
+                    "DECISION_ATTESTATION_REPLAY_REJECTED",
+                }
             ]
 
             if consumed_record is None:
@@ -6076,6 +6086,2111 @@ class OIDCDiscoveryJWKSSource:
 
 
     @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding(
+        cls,
+        attested_bundle,
+        registry,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+        verify_integrity=True,
+    ):
+        """Cryptographically bind a proof-bundle attestation to its one-time consumption event.
+
+        The bundle attestation authenticates the bundle fingerprint, trusted-key
+        provenance, and replay context. The authoritative consumption audit chain
+        separately authenticates the durable CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED
+        event. This method cross-checks both roots and derives a deterministic
+        binding fingerprint without mutating state or introducing storage.
+        """
+        if not isinstance(registry, TrustedAttestationKeyRegistry):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "trusted_key_registry_required",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_with_registry(
+            attested_bundle,
+            registry,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            require_current_registry_binding=require_current_registry_binding,
+            expected_verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not verification.get("success"):
+            return {
+                **verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        attestation = attested_bundle.get("bundle_attestation") or {}
+        attestation_id = str(verification.get("attestation_id", "") or "").strip()
+        nonce = str(verification.get("nonce", "") or "").strip()
+        bundle_fingerprint = str(verification.get("bundle_fingerprint", "") or "").strip().lower()
+        chain_fingerprint = str(verification.get("chain_fingerprint", "") or "").strip().lower()
+        try:
+            proof_count = int(verification.get("proof_count", 0) or 0)
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "proof_count_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        signature_fingerprint = str(verification.get("signature_fingerprint", "") or "").strip().lower()
+        key_fingerprint = str(verification.get("key_fingerprint", "") or "").strip().lower()
+        registry_revision = verification.get("recorded_registry_revision", attestation.get("registry_revision"))
+        key_set_fingerprint = str(
+            verification.get("recorded_key_set_fingerprint", attestation.get("key_set_fingerprint", "")) or ""
+        ).strip().lower()
+        trusted_key_source = str(
+            verification.get("trusted_key_source", attestation.get("key_source", "")) or ""
+        ).strip()
+        trusted_key_version = str(
+            verification.get("trusted_key_version", attestation.get("key_version", "")) or ""
+        ).strip()
+
+        status = registry.get_decision_attestation_consumption_status(
+            attestation_id,
+            verify_integrity=verify_integrity,
+            include_replay_events=True,
+        )
+        if not status.get("success"):
+            return {
+                **status,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": f"consumption_status_{status.get('reason', status.get('status', 'invalid'))}",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if status.get("status") != "DECISION_ATTESTATION_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "attestation_not_consumed",
+                "consumption_status": status,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        consumed = status.get("consumed_record") or {}
+        audit_record = status.get("consumption_audit_record") or {}
+        if str(consumed.get("decision_fingerprint", "") or "").strip().lower() != bundle_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumed_record_bundle_fingerprint_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(consumed.get("nonce", "") or "").strip() != nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumed_record_nonce_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("event_type", "") or "") != "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "unexpected_consumption_event_type",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("attestation_id", "") or "").strip() != attestation_id:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "audit_attestation_id_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("decision_fingerprint", "") or "").strip().lower() != bundle_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "audit_bundle_fingerprint_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("nonce", "") or "").strip() != nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "audit_nonce_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        record_hash = str(audit_record.get("record_hash", "") or "").strip().lower()
+        previous_hash = str(audit_record.get("previous_hash", "") or "").strip().lower()
+        if not record_hash or not previous_hash:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumption_audit_hash_fields_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        try:
+            consumed_at = float(consumed.get("consumed_at"))
+            event_at = float(audit_record.get("event_at"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumption_time_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if consumed_at != event_at:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumption_time_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        sequence = audit_record.get("sequence")
+        try:
+            sequence = int(sequence)
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_INVALID",
+                "reason": "consumption_audit_sequence_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        binding_payload = {
+            "binding_version": 1,
+            "attestation_type": str(attestation.get("attestation_type", "") or ""),
+            "issuer": str(verification.get("issuer", "") or "").strip().rstrip("/"),
+            "key_id": str(verification.get("key_id", "") or "").strip(),
+            "key_fingerprint": key_fingerprint,
+            "registry_revision": registry_revision,
+            "key_set_fingerprint": key_set_fingerprint,
+            "trusted_key_source": trusted_key_source,
+            "trusted_key_version": trusted_key_version,
+            "bundle_id": str(verification.get("bundle_id", "") or "").strip(),
+            "bundle_fingerprint": bundle_fingerprint,
+            "chain_fingerprint": chain_fingerprint,
+            "proof_count": proof_count,
+            "attestation_id": attestation_id,
+            "nonce": nonce,
+            "signature_fingerprint": signature_fingerprint,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+        }
+        binding_fingerprint = hashlib.sha256(
+            _canonical_json(binding_payload).encode("utf-8")
+        ).hexdigest()
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BOUND",
+            "binding_version": 1,
+            "binding_fingerprint": binding_fingerprint,
+            "attestation_id": attestation_id,
+            "nonce": nonce,
+            "bundle_id": binding_payload["bundle_id"],
+            "bundle_fingerprint": bundle_fingerprint,
+            "chain_fingerprint": chain_fingerprint,
+            "proof_count": proof_count,
+            "signature_fingerprint": signature_fingerprint,
+            "key_fingerprint": key_fingerprint,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+            "consumption_audit_head_hash": record_hash,
+            "current_registry_binding": verification.get("current_registry_binding"),
+            "verification": verification,
+            "consumption_status": status,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    def export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        self,
+        attested_bundle,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+        verify_integrity=True,
+    ):
+        """Export a self-contained cryptographic proof of proof-bundle-attestation consumption."""
+        if not isinstance(attested_bundle, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "bundle_must_be_object",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        binding = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding(
+            attested_bundle,
+            self.registry,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+            require_current_registry_binding=require_current_registry_binding,
+            verify_integrity=verify_integrity,
+        )
+        if not binding.get("success"):
+            return {
+                **binding,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        sequence = binding.get("consumption_audit_sequence")
+        exported = self.registry.export_decision_attestation_consumption_audit_evidence(
+            start_sequence=sequence,
+            end_sequence=sequence,
+        )
+        if not exported.get("success"):
+            return {
+                **exported,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_audit_evidence_export_failed",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        proof = {
+            "schema_version": 1,
+            "proof_type": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_BINDING_PROOF",
+            "attested_bundle": json.loads(_canonical_json(attested_bundle)),
+            "consumption_audit_evidence": exported.get("evidence"),
+            "binding": {
+                "binding_version": binding.get("binding_version"),
+                "binding_fingerprint": binding.get("binding_fingerprint"),
+                "attestation_id": binding.get("attestation_id"),
+                "nonce": binding.get("nonce"),
+                "bundle_id": binding.get("bundle_id"),
+                "bundle_fingerprint": binding.get("bundle_fingerprint"),
+                "chain_fingerprint": binding.get("chain_fingerprint"),
+                "proof_count": binding.get("proof_count"),
+                "signature_fingerprint": binding.get("signature_fingerprint"),
+                "key_fingerprint": binding.get("key_fingerprint"),
+                "consumed_at": binding.get("consumed_at"),
+                "consumption_audit_sequence": binding.get("consumption_audit_sequence"),
+                "consumption_audit_previous_hash": binding.get("consumption_audit_previous_hash"),
+                "consumption_audit_record_hash": binding.get("consumption_audit_record_hash"),
+                "consumption_audit_head_hash": binding.get("consumption_audit_head_hash"),
+                "recorded_registry_revision": (binding.get("verification") or {}).get("recorded_registry_revision"),
+                "recorded_key_set_fingerprint": (binding.get("verification") or {}).get("recorded_key_set_fingerprint"),
+                "trusted_key_source": (binding.get("verification") or {}).get("trusted_key_source"),
+                "trusted_key_version": (binding.get("verification") or {}).get("trusted_key_version"),
+            },
+            "exported_at": float(time.time()),
+            "proof_fingerprint": "",
+        }
+        fingerprint_payload = dict(proof)
+        fingerprint_payload.pop("exported_at", None)
+        fingerprint_payload.pop("proof_fingerprint", None)
+        proof["proof_fingerprint"] = hashlib.sha256(
+            _canonical_json(fingerprint_payload).encode("utf-8")
+        ).hexdigest()
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_EXPORTED",
+            "proof": proof,
+            "binding": binding,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    def consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        self,
+        proof,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+    ):
+        """Verify and consume a bundle-attestation consumption binding proof exactly once.
+
+        The proof fingerprint is the immutable artifact identity.  The existing
+        trusted-registry one-time-consumption ledger, consumption audit hash chain,
+        persistent trust state, and inter-process lock are reused; no new storage
+        or parallel replay ledger is introduced.  The embedded bundle attestation
+        must already represent a valid historical consumption, and the proof itself
+        is then consumed exactly once using its deterministic fingerprint-derived ID.
+        """
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                "reason": "proof_must_be_object",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        proof_fingerprint = str(proof.get("proof_fingerprint", "") or "").strip().lower()
+        if len(proof_fingerprint) != 64 or any(char not in "0123456789abcdef" for char in proof_fingerprint):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                "reason": "proof_fingerprint_missing_or_invalid",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        attested_bundle = proof.get("attested_bundle")
+        if not isinstance(attested_bundle, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                "reason": "attested_bundle_missing",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        def _verify_current_state():
+            binding = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding(
+                attested_bundle,
+                self.registry,
+                expected_bundle_id=expected_bundle_id,
+                expected_issuer=expected_issuer,
+                expected_nonce=expected_nonce,
+                expected_attestation_id=expected_attestation_id,
+                verification_time=verification_time,
+                clock_skew_seconds=clock_skew_seconds,
+                require_current_registry_binding=require_current_registry_binding,
+                verify_integrity=True,
+            )
+            if not binding.get("success"):
+                return {
+                    **binding,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            attestation = attested_bundle.get("bundle_attestation") or {}
+            key_id = str(attestation.get("key_id", "") or "").strip()
+            discovered = self.registry.discover_key(key_id, IDENTITY_ATTESTATION_ALGORITHM_ED25519)
+            if not isinstance(discovered, dict) or discovered.get("public_key") is None:
+                return {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                    "reason": "trusted_key_not_found",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+            public_key = discovered.get("public_key")
+            metadata = discovered.get("metadata") or {}
+            key_fingerprint = str(metadata.get("fingerprint", "") or "").strip().lower()
+            if not key_fingerprint:
+                return {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                    "reason": "trusted_key_fingerprint_missing",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            proof_verification = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+                proof,
+                {key_fingerprint: public_key},
+                expected_bundle_id=expected_bundle_id,
+                expected_issuer=expected_issuer,
+                expected_key_id=expected_key_id,
+                expected_nonce=expected_nonce,
+                expected_attestation_id=expected_attestation_id,
+                expected_key_fingerprint=expected_key_fingerprint or key_fingerprint,
+                verification_time=verification_time,
+                clock_skew_seconds=clock_skew_seconds,
+            )
+            if not proof_verification.get("success"):
+                return {
+                    **proof_verification,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            consumption_attestation_id = f"proof-binding:{proof_fingerprint}"[:MAX_CONSUMED_ATTESTATION_ID_LENGTH]
+            consumption_nonce = f"proof-binding:{proof_fingerprint}"
+            event_time = time.time() if verification_time is None else verification_time
+
+            with self.registry._consumption_lock:
+                existing = self.registry.get_consumed_decision_attestation(consumption_attestation_id)
+                if existing is not None:
+                    replay_audit = self.registry._append_decision_attestation_consumption_audit(
+                        event_type="DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAY_REJECTED",
+                        attestation_id=consumption_attestation_id,
+                        decision_fingerprint=proof_fingerprint,
+                        nonce=consumption_nonce,
+                        consumed_at=event_time,
+                        reason="proof_already_consumed",
+                        previous_consumed_record=existing,
+                    )
+                    if not replay_audit.get("success"):
+                        return {
+                            **replay_audit,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAY_FAILED",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    if self.state_path:
+                        try:
+                            self._persist_state()
+                        except Exception:
+                            self._load_persisted_state_unlocked()
+                            return {
+                                "success": False,
+                                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAY_FAILED",
+                                "reason": "durable_replay_audit_commit_failed",
+                                "read_only": False,
+                                "authoritative_state_mutated": False,
+                            }
+                    return {
+                        **proof_verification,
+                        "success": False,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAYED",
+                        "reason": "proof_already_consumed",
+                        "consumption_attestation_id": consumption_attestation_id,
+                        "consumption_nonce": consumption_nonce,
+                        "consumed_record": existing,
+                        "audit_record": replay_audit.get("record"),
+                        "read_only": False,
+                        "authoritative_state_mutated": True,
+                    }
+
+                claim = self.registry.consume_decision_attestation(
+                    consumption_attestation_id,
+                    proof_fingerprint,
+                    nonce=consumption_nonce,
+                    consumed_at=event_time,
+                )
+                if not claim.get("success"):
+                    return {
+                        **claim,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                audit = self.registry._append_decision_attestation_consumption_audit(
+                    event_type="DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED",
+                    attestation_id=consumption_attestation_id,
+                    decision_fingerprint=proof_fingerprint,
+                    nonce=consumption_nonce,
+                    consumed_at=event_time,
+                    reason="one_time_consumption",
+                )
+                if not audit.get("success"):
+                    self.registry._consumed_decision_attestations.pop(consumption_attestation_id, None)
+                    return {
+                        **audit,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_FAILED",
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                if self.state_path:
+                    try:
+                        self._persist_state()
+                    except OIDCTrustStateConflictError:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_CONFLICT",
+                            "reason": "durable_consumption_commit_conflict",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    except Exception as exc:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_FAILED",
+                            "reason": "durable_consumption_commit_failed",
+                            "error": str(exc)[:300],
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+
+                return {
+                    **proof_verification,
+                    "success": True,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED",
+                    "consumption": claim,
+                    "consumption_attestation_id": consumption_attestation_id,
+                    "consumption_nonce": consumption_nonce,
+                    "audit_record": audit.get("record"),
+                    "read_only": False,
+                    "authoritative_state_mutated": True,
+                }
+
+        if self.state_path:
+            from memory_storage import interprocess_lock
+            with self._refresh_lock:
+                with interprocess_lock(self.state_lock_path, timeout_seconds=self.state_lock_timeout_seconds):
+                    latest = self._load_persisted_state_unlocked()
+                    if not latest.get("loaded"):
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                            "reason": "authoritative_trust_state_unavailable",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    return _verify_current_state()
+
+        with self._refresh_lock:
+            return _verify_current_state()
+
+
+    @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        cls,
+        proof,
+        public_keys_by_fingerprint,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+    ):
+        """Verify a proof-bundle-attestation consumption binding proof offline."""
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "proof_must_be_object",
+            }
+        if not isinstance(public_keys_by_fingerprint, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "public_keys_by_fingerprint_must_be_object",
+            }
+        required = (
+            "schema_version",
+            "proof_type",
+            "attested_bundle",
+            "consumption_audit_evidence",
+            "binding",
+            "proof_fingerprint",
+        )
+        missing = [field for field in required if field not in proof]
+        if missing:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "missing_proof_fields",
+                "fields": missing,
+            }
+        try:
+            schema_version = int(proof.get("schema_version", 0) or 0)
+        except (TypeError, ValueError):
+            schema_version = 0
+        if schema_version != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "unsupported_proof_schema",
+            }
+        if proof.get("proof_type") != "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_BINDING_PROOF":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "unsupported_proof_type",
+            }
+
+        fingerprint_payload = dict(proof)
+        fingerprint_payload.pop("exported_at", None)
+        expected_proof_fingerprint = str(fingerprint_payload.pop("proof_fingerprint", "") or "").strip().lower()
+        actual_proof_fingerprint = hashlib.sha256(_canonical_json(fingerprint_payload).encode("utf-8")).hexdigest()
+        if not expected_proof_fingerprint or expected_proof_fingerprint != actual_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "proof_fingerprint_mismatch",
+                "expected_fingerprint": expected_proof_fingerprint,
+                "actual_fingerprint": actual_proof_fingerprint,
+            }
+
+        attested_bundle = proof.get("attested_bundle")
+        attestation = attested_bundle.get("bundle_attestation") if isinstance(attested_bundle, dict) else None
+        if not isinstance(attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "bundle_attestation_missing",
+            }
+        key_fingerprint = str(attestation.get("key_fingerprint", "") or "").strip().lower()
+        if not key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "attestation_key_fingerprint_missing",
+            }
+        public_key = public_keys_by_fingerprint.get(key_fingerprint)
+        if public_key is None:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "attestation_public_key_missing",
+            }
+
+        bundle_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_offline(
+            attested_bundle,
+            public_keys_by_fingerprint,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            expected_verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not bundle_verification.get("success"):
+            return {
+                **bundle_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "bundle_attestation_invalid",
+            }
+
+        expected_key_fingerprint = str(expected_key_fingerprint or "").strip().lower()
+        if expected_key_fingerprint and key_fingerprint != expected_key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "attested_key_fingerprint_mismatch",
+            }
+        try:
+            actual_public_key_fingerprint = _public_key_fingerprint(public_key).strip().lower()
+        except Exception:
+            actual_public_key_fingerprint = ""
+        if not actual_public_key_fingerprint or actual_public_key_fingerprint != key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "public_key_fingerprint_mismatch",
+            }
+
+        consumption_evidence = proof.get("consumption_audit_evidence")
+        evidence_verification = TrustedAttestationKeyRegistry.verify_decision_attestation_consumption_audit_evidence(consumption_evidence)
+        if not evidence_verification.get("success"):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_audit_evidence_invalid",
+                "verification": evidence_verification,
+            }
+
+        binding = proof.get("binding")
+        if not isinstance(binding, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_not_object",
+            }
+
+        try:
+            sequence = int(binding.get("consumption_audit_sequence"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_audit_sequence_invalid",
+            }
+        records = consumption_evidence.get("records") if isinstance(consumption_evidence, dict) else None
+        if not isinstance(records, list):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_records_not_list",
+            }
+        matching = [
+            record for record in records
+            if isinstance(record, dict) and int(record.get("sequence", 0) or 0) == sequence
+        ]
+        if len(matching) != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_audit_record_not_found",
+            }
+        audit_record = matching[0]
+        attestation_id = str(bundle_verification.get("attestation_id", "") or "").strip()
+        nonce = str(bundle_verification.get("nonce", "") or "").strip()
+        bundle_fingerprint = str(bundle_verification.get("bundle_fingerprint", "") or "").strip().lower()
+        chain_fingerprint = str(bundle_verification.get("chain_fingerprint", "") or "").strip().lower()
+        try:
+            proof_count = int(bundle_verification.get("proof_count", 0) or 0)
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "proof_count_invalid",
+            }
+        signature_fingerprint = str(bundle_verification.get("signature_fingerprint", "") or "").strip().lower()
+        if str(audit_record.get("event_type", "") or "") != "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "unexpected_consumption_event_type",
+            }
+        if str(audit_record.get("attestation_id", "") or "").strip() != attestation_id:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "audit_attestation_id_mismatch",
+            }
+        if str(audit_record.get("nonce", "") or "").strip() != nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "audit_nonce_mismatch",
+            }
+        if str(audit_record.get("decision_fingerprint", "") or "").strip().lower() != bundle_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "audit_bundle_fingerprint_mismatch",
+            }
+
+        record_hash = str(audit_record.get("record_hash", "") or "").strip().lower()
+        previous_hash = str(audit_record.get("previous_hash", "") or "").strip().lower()
+        if record_hash != str(binding.get("consumption_audit_record_hash", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_record_hash_mismatch",
+            }
+        if previous_hash != str(binding.get("consumption_audit_previous_hash", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_previous_hash_mismatch",
+            }
+
+        try:
+            consumed_at = float(audit_record.get("event_at"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "consumption_time_invalid",
+            }
+        try:
+            binding_consumed_at = float(binding.get("consumed_at"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_consumption_time_invalid",
+            }
+        if binding_consumed_at != consumed_at:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_consumption_time_mismatch",
+            }
+
+        if str(binding.get("bundle_id", "") or "").strip() != str(bundle_verification.get("bundle_id", "") or "").strip():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_bundle_id_mismatch",
+            }
+        if str(binding.get("bundle_fingerprint", "") or "").strip().lower() != bundle_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_bundle_fingerprint_mismatch",
+            }
+        if str(binding.get("chain_fingerprint", "") or "").strip().lower() != chain_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_chain_fingerprint_mismatch",
+            }
+        if int(binding.get("proof_count", 0) or 0) != proof_count:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_proof_count_mismatch",
+            }
+        if str(binding.get("signature_fingerprint", "") or "").strip().lower() != signature_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_signature_fingerprint_mismatch",
+            }
+        if str(binding.get("key_fingerprint", "") or "").strip().lower() != key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_key_fingerprint_mismatch",
+            }
+        if str(binding.get("attestation_id", "") or "").strip() != attestation_id:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_attestation_id_mismatch",
+            }
+        if str(binding.get("nonce", "") or "").strip() != nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_nonce_mismatch",
+            }
+
+        binding_payload = {
+            "binding_version": int(binding.get("binding_version", 0) or 0),
+            "attestation_type": str(attestation.get("attestation_type", "") or ""),
+            "issuer": str(bundle_verification.get("issuer", "") or "").strip().rstrip("/"),
+            "key_id": str(bundle_verification.get("key_id", "") or "").strip(),
+            "key_fingerprint": key_fingerprint,
+            "registry_revision": binding.get("recorded_registry_revision", attestation.get("registry_revision")),
+            "key_set_fingerprint": str(
+                binding.get("recorded_key_set_fingerprint", attestation.get("key_set_fingerprint", "")) or ""
+            ).strip().lower(),
+            "trusted_key_source": str(
+                binding.get("trusted_key_source", attestation.get("key_source", "")) or ""
+            ).strip(),
+            "trusted_key_version": str(
+                binding.get("trusted_key_version", attestation.get("key_version", "")) or ""
+            ).strip(),
+            "bundle_id": str(bundle_verification.get("bundle_id", "") or "").strip(),
+            "bundle_fingerprint": bundle_fingerprint,
+            "chain_fingerprint": chain_fingerprint,
+            "proof_count": proof_count,
+            "attestation_id": attestation_id,
+            "nonce": nonce,
+            "signature_fingerprint": signature_fingerprint,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+        }
+        if binding_payload["binding_version"] != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "unsupported_binding_version",
+            }
+        actual_binding_fingerprint = hashlib.sha256(_canonical_json(binding_payload).encode("utf-8")).hexdigest()
+        expected_binding_fingerprint = str(binding.get("binding_fingerprint", "") or "").strip().lower()
+        if actual_binding_fingerprint != expected_binding_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_INVALID",
+                "reason": "binding_fingerprint_mismatch",
+                "expected_fingerprint": expected_binding_fingerprint,
+                "actual_fingerprint": actual_binding_fingerprint,
+            }
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_VERIFIED",
+            "proof_fingerprint": actual_proof_fingerprint,
+            "binding_fingerprint": actual_binding_fingerprint,
+            "attestation_id": attestation_id,
+            "nonce": nonce,
+            "bundle_id": bundle_verification.get("bundle_id", ""),
+            "bundle_fingerprint": bundle_fingerprint,
+            "chain_fingerprint": chain_fingerprint,
+            "proof_count": proof_count,
+            "signature_fingerprint": signature_fingerprint,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_record_hash": record_hash,
+            "recorded_key_fingerprint": key_fingerprint,
+            "recorded_registry_revision": binding_payload["registry_revision"],
+            "recorded_key_set_fingerprint": binding_payload["key_set_fingerprint"],
+            "trusted_key_source": binding_payload["trusted_key_source"],
+            "trusted_key_version": binding_payload["trusted_key_version"],
+            "current_registry_binding": None,
+            "offline": True,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        cls,
+        proof,
+        registry,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+        verify_integrity=True,
+    ):
+        """Cryptographically bind consumption of a bundle-attestation binding proof.
+
+        The source binding proof is already cryptographically tied to the signed
+        bundle attestation and its historical consume event. This additional
+        binding cross-checks that proof against the authoritative one-time
+        consumption event for the binding proof itself. No new storage is used.
+        """
+        if not isinstance(registry, TrustedAttestationKeyRegistry):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "trusted_key_registry_required",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_must_be_object",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        source_proof_fingerprint = str(proof.get("proof_fingerprint", "") or "").strip().lower()
+        if len(source_proof_fingerprint) != 64 or any(
+            char not in "0123456789abcdef" for char in source_proof_fingerprint
+        ):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_fingerprint_missing_or_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        attested_bundle = proof.get("attested_bundle")
+        if not isinstance(attested_bundle, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "attested_bundle_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        attestation = attested_bundle.get("bundle_attestation")
+        if not isinstance(attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "bundle_attestation_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        key_id = str(attestation.get("key_id", "") or "").strip()
+        discovered = registry.discover_key(key_id, IDENTITY_ATTESTATION_ALGORITHM_ED25519)
+        if not isinstance(discovered, dict) or discovered.get("public_key") is None:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "trusted_key_not_found",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        public_key = discovered.get("public_key")
+        metadata = discovered.get("metadata") or {}
+        discovered_key_fingerprint = str(metadata.get("fingerprint", "") or "").strip().lower()
+        if not discovered_key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                "reason": "trusted_key_fingerprint_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        registry_bundle_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_with_registry(
+            attested_bundle,
+            registry,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            require_current_registry_binding=require_current_registry_binding,
+            expected_verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not registry_bundle_verification.get("success"):
+            return {
+                **registry_bundle_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "bundle_attestation_registry_verification_failed",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        source_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+            proof,
+            {discovered_key_fingerprint: public_key},
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            expected_key_fingerprint=expected_key_fingerprint or discovered_key_fingerprint,
+            verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not source_verification.get("success"):
+            return {
+                **source_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        consumption_attestation_id = f"proof-binding:{source_proof_fingerprint}"[:MAX_CONSUMED_ATTESTATION_ID_LENGTH]
+        consumption_nonce = f"proof-binding:{source_proof_fingerprint}"
+        status = registry.get_decision_attestation_consumption_status(
+            consumption_attestation_id,
+            verify_integrity=verify_integrity,
+            include_replay_events=True,
+        )
+        if not status.get("success"):
+            return {
+                **status,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": f"consumption_status_{status.get('reason', status.get('status', 'invalid'))}",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if status.get("status") != "DECISION_ATTESTATION_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_not_consumed",
+                "consumption_status": status,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        consumed = status.get("consumed_record") or {}
+        audit_record = status.get("consumption_audit_record") or {}
+        if str(consumed.get("decision_fingerprint", "") or "").strip().lower() != source_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumed_record_proof_fingerprint_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(consumed.get("nonce", "") or "") != consumption_nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumed_record_nonce_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("event_type", "") or "") != "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unexpected_consumption_event_type",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("attestation_id", "") or "").strip() != consumption_attestation_id:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "audit_attestation_id_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("decision_fingerprint", "") or "").strip().lower() != source_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "audit_proof_fingerprint_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("nonce", "") or "") != consumption_nonce:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "audit_nonce_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        record_hash = str(audit_record.get("record_hash", "") or "").strip().lower()
+        previous_hash = str(audit_record.get("previous_hash", "") or "").strip().lower()
+        if not record_hash or not previous_hash:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_hash_fields_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        try:
+            consumed_at = float(consumed.get("consumed_at"))
+            event_at = float(audit_record.get("event_at"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_time_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if consumed_at != event_at:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_time_mismatch",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        try:
+            sequence = int(audit_record.get("sequence"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_sequence_invalid",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        source_binding_fingerprint = str(source_verification.get("binding_fingerprint", "") or "").strip().lower()
+        source_bundle_id = str(source_verification.get("bundle_id", "") or "").strip()
+        source_bundle_fingerprint = str(source_verification.get("bundle_fingerprint", "") or "").strip().lower()
+        source_chain_fingerprint = str(source_verification.get("chain_fingerprint", "") or "").strip().lower()
+        try:
+            source_proof_count = int(source_verification.get("proof_count", 0) or 0)
+        except (TypeError, ValueError):
+            source_proof_count = 0
+
+        binding_payload = {
+            "binding_version": 1,
+            "source_proof_type": str(proof.get("proof_type", "") or ""),
+            "source_proof_fingerprint": source_proof_fingerprint,
+            "source_binding_fingerprint": source_binding_fingerprint,
+            "bundle_id": source_bundle_id,
+            "bundle_fingerprint": source_bundle_fingerprint,
+            "chain_fingerprint": source_chain_fingerprint,
+            "proof_count": source_proof_count,
+            "attestation_id": str(source_verification.get("attestation_id", "") or "").strip(),
+            "nonce": str(source_verification.get("nonce", "") or ""),
+            "key_fingerprint": discovered_key_fingerprint,
+            "registry_revision": source_verification.get("recorded_registry_revision"),
+            "key_set_fingerprint": str(source_verification.get("recorded_key_set_fingerprint", "") or "").strip().lower(),
+            "trusted_key_source": str(source_verification.get("trusted_key_source", "") or "").strip(),
+            "trusted_key_version": str(source_verification.get("trusted_key_version", "") or "").strip(),
+            "consumption_attestation_id": consumption_attestation_id,
+            "consumption_nonce": consumption_nonce,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+        }
+        if binding_payload["binding_version"] != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unsupported_binding_version",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        binding_fingerprint = hashlib.sha256(_canonical_json(binding_payload).encode("utf-8")).hexdigest()
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BOUND",
+            "source_proof_fingerprint": source_proof_fingerprint,
+            "source_binding_fingerprint": source_binding_fingerprint,
+            "binding_fingerprint": binding_fingerprint,
+            "bundle_id": source_bundle_id,
+            "bundle_fingerprint": source_bundle_fingerprint,
+            "chain_fingerprint": source_chain_fingerprint,
+            "proof_count": source_proof_count,
+            "attestation_id": binding_payload["attestation_id"],
+            "nonce": binding_payload["nonce"],
+            "key_fingerprint": discovered_key_fingerprint,
+            "consumption_attestation_id": consumption_attestation_id,
+            "consumption_nonce": consumption_nonce,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+            "recorded_registry_revision": binding_payload["registry_revision"],
+            "recorded_key_set_fingerprint": binding_payload["key_set_fingerprint"],
+            "trusted_key_source": binding_payload["trusted_key_source"],
+            "trusted_key_version": binding_payload["trusted_key_version"],
+            "current_registry_binding": source_verification.get("current_registry_binding"),
+            "verification": source_verification,
+            "consumption_status": status,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    def export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        self,
+        proof,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+        verify_integrity=True,
+    ):
+        """Export a self-contained proof that a binding proof was consumed once."""
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_must_be_object",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        binding = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+            proof,
+            self.registry,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            expected_key_fingerprint=expected_key_fingerprint,
+            verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+            require_current_registry_binding=require_current_registry_binding,
+            verify_integrity=verify_integrity,
+        )
+        if not binding.get("success"):
+            return {
+                **binding,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        sequence = binding.get("consumption_audit_sequence")
+        exported = self.registry.export_decision_attestation_consumption_audit_evidence(
+            start_sequence=sequence,
+            end_sequence=sequence,
+        )
+        if not exported.get("success"):
+            return {
+                **exported,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_evidence_export_failed",
+                "proof": None,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        proof_export = {
+            "schema_version": 1,
+            "proof_type": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_PROOF",
+            "source_proof": json.loads(_canonical_json(proof)),
+            "consumption_audit_evidence": exported.get("evidence"),
+            "binding": {
+                "binding_version": binding.get("binding_version", 1),
+                "source_proof_fingerprint": binding.get("source_proof_fingerprint"),
+                "source_binding_fingerprint": binding.get("source_binding_fingerprint"),
+                "bundle_id": binding.get("bundle_id"),
+                "bundle_fingerprint": binding.get("bundle_fingerprint"),
+                "chain_fingerprint": binding.get("chain_fingerprint"),
+                "proof_count": binding.get("proof_count"),
+                "attestation_id": binding.get("attestation_id"),
+                "nonce": binding.get("nonce"),
+                "key_fingerprint": binding.get("key_fingerprint"),
+                "consumption_attestation_id": binding.get("consumption_attestation_id"),
+                "consumption_nonce": binding.get("consumption_nonce"),
+                "consumed_at": binding.get("consumed_at"),
+                "consumption_audit_sequence": binding.get("consumption_audit_sequence"),
+                "consumption_audit_previous_hash": binding.get("consumption_audit_previous_hash"),
+                "consumption_audit_record_hash": binding.get("consumption_audit_record_hash"),
+                "recorded_registry_revision": binding.get("recorded_registry_revision"),
+                "recorded_key_set_fingerprint": binding.get("recorded_key_set_fingerprint"),
+                "trusted_key_source": binding.get("trusted_key_source"),
+                "trusted_key_version": binding.get("trusted_key_version"),
+                "binding_fingerprint": binding.get("binding_fingerprint"),
+            },
+            "exported_at": float(time.time()),
+            "proof_fingerprint": "",
+        }
+        fingerprint_payload = dict(proof_export)
+        fingerprint_payload.pop("exported_at", None)
+        fingerprint_payload.pop("proof_fingerprint", None)
+        embedded_audit = fingerprint_payload.get("consumption_audit_evidence")
+        if isinstance(embedded_audit, dict):
+            embedded_audit = dict(embedded_audit)
+            embedded_audit.pop("exported_at", None)
+            fingerprint_payload["consumption_audit_evidence"] = embedded_audit
+        proof_export["proof_fingerprint"] = hashlib.sha256(
+            _canonical_json(fingerprint_payload).encode("utf-8")
+        ).hexdigest()
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_EXPORTED",
+            "proof": proof_export,
+            "binding": binding,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    def consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        self,
+        proof,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+    ):
+        """Verify and consume a consumption-binding proof exactly once.
+
+        The proof fingerprint is the immutable artifact identity.  The existing
+        trusted-registry one-time-consumption ledger, immutable consumption audit
+        chain, persistent trust state, and inter-process lock are reused.  No new
+        storage or replay ledger is introduced.
+        """
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                "reason": "proof_must_be_object",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        proof_fingerprint = str(proof.get("proof_fingerprint", "") or "").strip().lower()
+        if len(proof_fingerprint) != 64 or any(char not in "0123456789abcdef" for char in proof_fingerprint):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                "reason": "proof_fingerprint_missing_or_invalid",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        source_proof = proof.get("source_proof")
+        if not isinstance(source_proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                "reason": "source_proof_missing",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+        attested_bundle = source_proof.get("attested_bundle")
+        attestation = attested_bundle.get("bundle_attestation") if isinstance(attested_bundle, dict) else None
+        if not isinstance(attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                "reason": "bundle_attestation_missing",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        def _verify_current_state():
+            key_id = str(attestation.get("key_id", "") or "").strip()
+            discovered = self.registry.discover_key(key_id, IDENTITY_ATTESTATION_ALGORITHM_ED25519)
+            if not isinstance(discovered, dict) or discovered.get("public_key") is None:
+                return {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                    "reason": "trusted_key_not_found",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+            public_key = discovered.get("public_key")
+            metadata = discovered.get("metadata") or {}
+            key_fingerprint = str(metadata.get("fingerprint", "") or "").strip().lower()
+            if not key_fingerprint:
+                return {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_INVALID",
+                    "reason": "trusted_key_fingerprint_missing",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            authoritative_binding = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+                source_proof,
+                self.registry,
+                expected_bundle_id=expected_bundle_id,
+                expected_issuer=expected_issuer,
+                expected_key_id=expected_key_id,
+                expected_nonce=expected_nonce,
+                expected_attestation_id=expected_attestation_id,
+                expected_key_fingerprint=expected_key_fingerprint or key_fingerprint,
+                verification_time=verification_time,
+                clock_skew_seconds=clock_skew_seconds,
+                require_current_registry_binding=require_current_registry_binding,
+                verify_integrity=True,
+            )
+            if not authoritative_binding.get("success"):
+                return {
+                    **authoritative_binding,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            offline_binding = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+                proof,
+                {key_fingerprint: public_key},
+                expected_bundle_id=expected_bundle_id,
+                expected_issuer=expected_issuer,
+                expected_key_id=expected_key_id,
+                expected_nonce=expected_nonce,
+                expected_attestation_id=expected_attestation_id,
+                expected_key_fingerprint=expected_key_fingerprint or key_fingerprint,
+                verification_time=verification_time,
+                clock_skew_seconds=clock_skew_seconds,
+            )
+            if not offline_binding.get("success"):
+                return {
+                    **offline_binding,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            consumption_attestation_id = f"binding-consumption-binding:{proof_fingerprint}"[:MAX_CONSUMED_ATTESTATION_ID_LENGTH]
+            consumption_nonce = f"binding-consumption-binding:{proof_fingerprint}"
+            event_time = time.time() if verification_time is None else verification_time
+
+            with self.registry._consumption_lock:
+                existing = self.registry.get_consumed_decision_attestation(consumption_attestation_id)
+                if existing is not None:
+                    replay_audit = self.registry._append_decision_attestation_consumption_audit(
+                        event_type="DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAY_REJECTED",
+                        attestation_id=consumption_attestation_id,
+                        decision_fingerprint=proof_fingerprint,
+                        nonce=consumption_nonce,
+                        consumed_at=event_time,
+                        reason="proof_already_consumed",
+                        previous_consumed_record=existing,
+                    )
+                    if not replay_audit.get("success"):
+                        return {
+                            **replay_audit,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAY_FAILED",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    if self.state_path:
+                        try:
+                            self._persist_state()
+                        except Exception:
+                            self._load_persisted_state_unlocked()
+                            return {
+                                "success": False,
+                                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAY_FAILED",
+                                "reason": "durable_replay_audit_commit_failed",
+                                "read_only": False,
+                                "authoritative_state_mutated": False,
+                            }
+                    return {
+                        **authoritative_binding,
+                        **offline_binding,
+                        "success": False,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAYED",
+                        "reason": "proof_already_consumed",
+                        "consumption_attestation_id": consumption_attestation_id,
+                        "consumption_nonce": consumption_nonce,
+                        "consumed_record": existing,
+                        "audit_record": replay_audit.get("record"),
+                        "read_only": False,
+                        "authoritative_state_mutated": True,
+                    }
+
+                claim = self.registry.consume_decision_attestation(
+                    consumption_attestation_id,
+                    proof_fingerprint,
+                    nonce=consumption_nonce,
+                    consumed_at=event_time,
+                )
+                if not claim.get("success"):
+                    return {
+                        **claim,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                audit = self.registry._append_decision_attestation_consumption_audit(
+                    event_type="DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMED",
+                    attestation_id=consumption_attestation_id,
+                    decision_fingerprint=proof_fingerprint,
+                    nonce=consumption_nonce,
+                    consumed_at=event_time,
+                    reason="one_time_consumption",
+                )
+                if not audit.get("success"):
+                    self.registry._consumed_decision_attestations.pop(consumption_attestation_id, None)
+                    return {
+                        **audit,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_FAILED",
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                if self.state_path:
+                    try:
+                        self._persist_state()
+                    except OIDCTrustStateConflictError:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONFLICT",
+                            "reason": "durable_consumption_commit_conflict",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    except Exception as exc:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_FAILED",
+                            "reason": "durable_consumption_commit_failed",
+                            "error": str(exc)[:300],
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+
+                return {
+                    **authoritative_binding,
+                    **offline_binding,
+                    "success": True,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMED",
+                    "consumption": claim,
+                    "consumption_attestation_id": consumption_attestation_id,
+                    "consumption_nonce": consumption_nonce,
+                    "audit_record": audit.get("record"),
+                    "read_only": False,
+                    "authoritative_state_mutated": True,
+                }
+
+        if self.state_path:
+            from memory_storage import interprocess_lock
+            with self._refresh_lock:
+                with interprocess_lock(self.state_lock_path, timeout_seconds=self.state_lock_timeout_seconds):
+                    latest = self._load_persisted_state_unlocked()
+                    if not latest.get("loaded"):
+                        return {
+                            "success": False,
+                            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMPTION_INVALID",
+                            "reason": "authoritative_trust_state_unavailable",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    return _verify_current_state()
+
+        with self._refresh_lock:
+            return _verify_current_state()
+
+    @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+        cls,
+        proof,
+        public_keys_by_fingerprint,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_key_fingerprint="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+    ):
+        """Verify a binding proof's consumption proof without authoritative state."""
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_must_be_object",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if not isinstance(public_keys_by_fingerprint, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "public_keys_by_fingerprint_must_be_object",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        required = (
+            "schema_version",
+            "proof_type",
+            "source_proof",
+            "consumption_audit_evidence",
+            "binding",
+            "proof_fingerprint",
+        )
+        missing = [field for field in required if field not in proof]
+        if missing:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "missing_proof_fields",
+                "fields": missing,
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        try:
+            schema_version = int(proof.get("schema_version", 0) or 0)
+        except (TypeError, ValueError):
+            schema_version = 0
+        if schema_version != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unsupported_proof_schema",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if proof.get("proof_type") != "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_PROOF":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unsupported_proof_type",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        fingerprint_payload = dict(proof)
+        fingerprint_payload.pop("exported_at", None)
+        expected_proof_fingerprint = str(fingerprint_payload.pop("proof_fingerprint", "") or "").strip().lower()
+        embedded_audit = fingerprint_payload.get("consumption_audit_evidence")
+        if isinstance(embedded_audit, dict):
+            embedded_audit = dict(embedded_audit)
+            embedded_audit.pop("exported_at", None)
+            fingerprint_payload["consumption_audit_evidence"] = embedded_audit
+        actual_proof_fingerprint = hashlib.sha256(_canonical_json(fingerprint_payload).encode("utf-8")).hexdigest()
+        if not expected_proof_fingerprint or expected_proof_fingerprint != actual_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "proof_fingerprint_mismatch",
+                "expected_fingerprint": expected_proof_fingerprint,
+                "actual_fingerprint": actual_proof_fingerprint,
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        source_proof = proof.get("source_proof")
+        if not isinstance(source_proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "source_proof_missing",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        source_proof_fingerprint = str(source_proof.get("proof_fingerprint", "") or "").strip().lower()
+        source_binding = source_proof.get("binding") if isinstance(source_proof, dict) else None
+        source_attested_bundle = source_proof.get("attested_bundle") if isinstance(source_proof, dict) else None
+        source_attestation = source_attested_bundle.get("bundle_attestation") if isinstance(source_attested_bundle, dict) else None
+        if not isinstance(source_binding, dict) or not isinstance(source_attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "source_proof_structure_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        source_key_fingerprint = str(source_attestation.get("key_fingerprint", "") or "").strip().lower()
+        source_key = public_keys_by_fingerprint.get(source_key_fingerprint)
+        if source_key is None:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "attestation_public_key_missing",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        source_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+            source_proof,
+            public_keys_by_fingerprint,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            expected_key_fingerprint=expected_key_fingerprint or source_key_fingerprint,
+            verification_time=verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not source_verification.get("success"):
+            return {
+                **source_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "source_proof_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        consumption_evidence = proof.get("consumption_audit_evidence")
+        evidence_verification = TrustedAttestationKeyRegistry.verify_decision_attestation_consumption_audit_evidence(consumption_evidence)
+        if not evidence_verification.get("success"):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_evidence_invalid",
+                "verification": evidence_verification,
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        binding = proof.get("binding")
+        if not isinstance(binding, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_not_object",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        try:
+            sequence = int(binding.get("consumption_audit_sequence"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_sequence_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        records = consumption_evidence.get("records") if isinstance(consumption_evidence, dict) else None
+        if not isinstance(records, list):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_records_not_list",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        matching = [record for record in records if isinstance(record, dict) and int(record.get("sequence", 0) or 0) == sequence]
+        if len(matching) != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_audit_record_not_found",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        audit_record = matching[0]
+        consumption_attestation_id = str(binding.get("consumption_attestation_id", "") or "").strip()
+        consumption_nonce = str(binding.get("consumption_nonce", "") or "")
+        if consumption_attestation_id != f"proof-binding:{source_proof_fingerprint}"[:MAX_CONSUMED_ATTESTATION_ID_LENGTH]:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_attestation_id_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if consumption_nonce != f"proof-binding:{source_proof_fingerprint}":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_nonce_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("event_type", "") or "") != "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unexpected_consumption_event_type",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("attestation_id", "") or "").strip() != consumption_attestation_id:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "audit_attestation_id_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(audit_record.get("decision_fingerprint", "") or "").strip().lower() != source_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "audit_proof_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        record_hash = str(audit_record.get("record_hash", "") or "").strip().lower()
+        previous_hash = str(audit_record.get("previous_hash", "") or "").strip().lower()
+        try:
+            consumed_at = float(audit_record.get("event_at"))
+            binding_consumed_at = float(binding.get("consumed_at"))
+        except (TypeError, ValueError):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_time_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if binding_consumed_at != consumed_at:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "consumption_time_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("source_proof_fingerprint", "") or "").strip().lower() != source_proof_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_source_proof_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("source_binding_fingerprint", "") or "").strip().lower() != str(source_verification.get("binding_fingerprint", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_source_binding_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("bundle_id", "") or "").strip() != str(source_verification.get("bundle_id", "") or "").strip():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_bundle_id_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("bundle_fingerprint", "") or "").strip().lower() != str(source_verification.get("bundle_fingerprint", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_bundle_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("chain_fingerprint", "") or "").strip().lower() != str(source_verification.get("chain_fingerprint", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_chain_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("key_fingerprint", "") or "").strip().lower() != source_key_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_key_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("consumption_audit_record_hash", "") or "").strip().lower() != record_hash:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_record_hash_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if str(binding.get("consumption_audit_previous_hash", "") or "").strip().lower() != previous_hash:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_previous_hash_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        binding_payload = {
+            "binding_version": int(binding.get("binding_version", 0) or 0),
+            "source_proof_type": str(source_proof.get("proof_type", "") or ""),
+            "source_proof_fingerprint": source_proof_fingerprint,
+            "source_binding_fingerprint": str(source_verification.get("binding_fingerprint", "") or "").strip().lower(),
+            "bundle_id": str(source_verification.get("bundle_id", "") or "").strip(),
+            "bundle_fingerprint": str(source_verification.get("bundle_fingerprint", "") or "").strip().lower(),
+            "chain_fingerprint": str(source_verification.get("chain_fingerprint", "") or "").strip().lower(),
+            "proof_count": int(source_verification.get("proof_count", 0) or 0),
+            "attestation_id": str(source_verification.get("attestation_id", "") or "").strip(),
+            "nonce": str(source_verification.get("nonce", "") or ""),
+            "key_fingerprint": source_key_fingerprint,
+            "registry_revision": binding.get("recorded_registry_revision", source_verification.get("recorded_registry_revision")),
+            "key_set_fingerprint": str(binding.get("recorded_key_set_fingerprint", source_verification.get("recorded_key_set_fingerprint", "")) or "").strip().lower(),
+            "trusted_key_source": str(binding.get("trusted_key_source", source_verification.get("trusted_key_source", "")) or "").strip(),
+            "trusted_key_version": str(binding.get("trusted_key_version", source_verification.get("trusted_key_version", "")) or "").strip(),
+            "consumption_attestation_id": consumption_attestation_id,
+            "consumption_nonce": consumption_nonce,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+        }
+        if binding_payload["binding_version"] != 1:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "unsupported_binding_version",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        actual_binding_fingerprint = hashlib.sha256(_canonical_json(binding_payload).encode("utf-8")).hexdigest()
+        expected_binding_fingerprint = str(binding.get("binding_fingerprint", "") or "").strip().lower()
+        if actual_binding_fingerprint != expected_binding_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                "reason": "binding_fingerprint_mismatch",
+                "expected_fingerprint": expected_binding_fingerprint,
+                "actual_fingerprint": actual_binding_fingerprint,
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_OFFLINE_VERIFIED",
+            "proof_fingerprint": actual_proof_fingerprint,
+            "source_proof_fingerprint": source_proof_fingerprint,
+            "source_binding_fingerprint": str(source_verification.get("binding_fingerprint", "") or "").strip().lower(),
+            "binding_fingerprint": actual_binding_fingerprint,
+            "bundle_id": binding_payload["bundle_id"],
+            "bundle_fingerprint": binding_payload["bundle_fingerprint"],
+            "chain_fingerprint": binding_payload["chain_fingerprint"],
+            "proof_count": binding_payload["proof_count"],
+            "attestation_id": binding_payload["attestation_id"],
+            "nonce": binding_payload["nonce"],
+            "key_fingerprint": source_key_fingerprint,
+            "consumption_attestation_id": consumption_attestation_id,
+            "consumption_nonce": consumption_nonce,
+            "consumed_at": consumed_at,
+            "consumption_audit_sequence": sequence,
+            "consumption_audit_previous_hash": previous_hash,
+            "consumption_audit_record_hash": record_hash,
+            "recorded_registry_revision": binding_payload["registry_revision"],
+            "recorded_key_set_fingerprint": binding_payload["key_set_fingerprint"],
+            "trusted_key_source": binding_payload["trusted_key_source"],
+            "trusted_key_version": binding_payload["trusted_key_version"],
+            "offline": True,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    @classmethod
     def verify_decision_attestation_consumption_audit_evidence_trusted_key_replay_binding_offline(
         cls,
         attested_evidence,
@@ -7376,6 +9491,617 @@ class OIDCDiscoveryJWKSSource:
             "authoritative_state_mutated": False,
         }
 
+
+    @classmethod
+    def attest_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_with_trusted_key_replay_binding(
+        cls,
+        proof,
+        private_key,
+        registry,
+        *,
+        key_id,
+        issuer,
+        nonce="",
+        attestation_id="",
+        issued_at=None,
+        expires_at=None,
+        ttl_seconds=AUDIT_DECISION_ATTESTATION_DEFAULT_TTL_SECONDS,
+        expected_bundle_id="",
+        expected_source_issuer="",
+        expected_source_key_id="",
+        expected_source_nonce="",
+        expected_source_attestation_id="",
+        expected_verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+    ):
+        """Attest the terminal consumption-binding proof with trusted-key replay binding.
+
+        This signs the already self-contained terminal proof. It does not create
+        or mutate authoritative state; the proof remains the source of truth for
+        the underlying one-time consumption event.
+        """
+        replay = cls._normalize_decision_attestation_replay_binding(
+            nonce=nonce,
+            attestation_id=attestation_id,
+            issued_at=issued_at,
+            expires_at=expires_at,
+            ttl_seconds=ttl_seconds,
+        )
+        if not replay.get("success"):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": replay.get("reason"),
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if not isinstance(registry, TrustedAttestationKeyRegistry):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_registry_required",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if not isinstance(proof, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "proof_must_be_object",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        resolved_issuer = str(issuer or "").strip().rstrip("/")
+        normalized_key_id = str(key_id or "").strip()[:MAX_KEY_ID_LENGTH]
+        if not private_key or not normalized_key_id or not resolved_issuer:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "private_key_key_id_and_issuer_required",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        discovered = registry.discover_key(normalized_key_id, IDENTITY_ATTESTATION_ALGORITHM_ED25519)
+        if not isinstance(discovered, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_not_found",
+                "key_id": normalized_key_id,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        metadata = discovered.get("metadata") or {}
+        public_key = discovered.get("public_key")
+        key_status = normalize_attestation_key_status(metadata.get("status"))
+        if key_status not in {IDENTITY_KEY_STATUS_ACTIVE, IDENTITY_KEY_STATUS_GRACE}:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_status_not_allowed",
+                "key_id": normalized_key_id,
+                "key_status": key_status,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if public_key is None:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_missing_public_key",
+                "key_id": normalized_key_id,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        try:
+            private_fingerprint = _public_key_fingerprint(private_key.public_key())
+        except Exception as exc:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "private_key_public_key_unavailable",
+                "error": str(exc)[:300],
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        registry_fingerprint = str(metadata.get("fingerprint", "") or "").strip().lower()
+        if not registry_fingerprint or private_fingerprint.lower() != registry_fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "private_key_does_not_match_trusted_key",
+                "key_id": normalized_key_id,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        proof_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+            proof,
+            {registry_fingerprint: public_key},
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_source_issuer,
+            expected_key_id=expected_source_key_id,
+            expected_nonce=expected_source_nonce,
+            expected_attestation_id=expected_source_attestation_id,
+            verification_time=expected_verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if proof_verification.get("success"):
+            terminal_binding = proof.get("binding") if isinstance(proof, dict) else None
+            if not isinstance(terminal_binding, dict):
+                proof_verification = {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                    "reason": "binding_not_object",
+                }
+            else:
+                recorded_provenance = {
+                    "registry_revision": terminal_binding.get("recorded_registry_revision"),
+                    "key_set_fingerprint": str(terminal_binding.get("recorded_key_set_fingerprint", "") or "").strip().lower(),
+                    "key_source": str(terminal_binding.get("trusted_key_source", "") or "").strip(),
+                    "key_version": str(terminal_binding.get("trusted_key_version", "") or "").strip(),
+                }
+                current_provenance = {
+                    "registry_revision": metadata.get("registry_revision"),
+                    "key_set_fingerprint": str(metadata.get("key_set_fingerprint", "") or "").strip().lower(),
+                    "key_source": str(metadata.get("source", "") or "").strip(),
+                    "key_version": str(metadata.get("version", "") or "").strip(),
+                }
+                if str(terminal_binding.get("key_fingerprint", "") or "").strip().lower() != registry_fingerprint:
+                    proof_verification = {
+                        "success": False,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                        "reason": "terminal_key_fingerprint_mismatch",
+                    }
+                elif recorded_provenance != current_provenance:
+                    proof_verification = {
+                        "success": False,
+                        "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_INVALID",
+                        "reason": "registry_provenance_mismatch",
+                    }
+        if not proof_verification.get("success"):
+            return {
+                **proof_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        payload = {
+            "schema_version": 2,
+            "attestation_type": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_TRUSTED_KEY_ATTESTATION",
+            "issuer": resolved_issuer,
+            "key_id": normalized_key_id,
+            "algorithm": IDENTITY_ATTESTATION_ALGORITHM_ED25519,
+            "key_fingerprint": registry_fingerprint,
+            "registry_revision": metadata.get("registry_revision", 0),
+            "key_set_fingerprint": str(metadata.get("key_set_fingerprint", "") or "").strip().lower(),
+            "key_source": str(metadata.get("source", "") or "").strip(),
+            "key_version": str(metadata.get("version", "") or "").strip(),
+            "proof_type": str(proof.get("proof_type", "") or ""),
+            "terminal_proof_fingerprint": str(proof_verification.get("proof_fingerprint", "") or "").strip().lower(),
+            "terminal_binding_fingerprint": str(proof_verification.get("binding_fingerprint", "") or "").strip().lower(),
+            "source_proof_fingerprint": str(proof_verification.get("source_proof_fingerprint", "") or "").strip().lower(),
+            "source_binding_fingerprint": str(proof_verification.get("source_binding_fingerprint", "") or "").strip().lower(),
+            "bundle_id": str(proof_verification.get("bundle_id", "") or "").strip(),
+            "bundle_fingerprint": str(proof_verification.get("bundle_fingerprint", "") or "").strip().lower(),
+            "chain_fingerprint": str(proof_verification.get("chain_fingerprint", "") or "").strip().lower(),
+            "proof_count": int(proof_verification.get("proof_count", 0) or 0),
+            "source_attestation_id": str(proof_verification.get("attestation_id", "") or "").strip(),
+            "source_nonce": str(proof_verification.get("nonce", "") or ""),
+            "consumption_attestation_id": str(proof_verification.get("consumption_attestation_id", "") or "").strip(),
+            "consumption_nonce": str(proof_verification.get("consumption_nonce", "") or ""),
+            "consumed_at": proof_verification.get("consumed_at"),
+            "consumption_audit_sequence": proof_verification.get("consumption_audit_sequence"),
+            "consumption_audit_previous_hash": str(proof_verification.get("consumption_audit_previous_hash", "") or "").strip().lower(),
+            "consumption_audit_record_hash": str(proof_verification.get("consumption_audit_record_hash", "") or "").strip().lower(),
+            "nonce": replay["nonce"],
+            "attestation_id": replay["attestation_id"],
+            "issued_at": replay["issued_at"],
+            "expires_at": replay["expires_at"],
+        }
+        try:
+            signature = private_key.sign(_canonical_json(payload).encode("utf-8"))
+        except Exception as exc:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "signing_failed",
+                "error": str(exc)[:300],
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        attested = {
+            "terminal_proof": json.loads(_canonical_json(proof)),
+            "terminal_proof_attestation": {
+                **payload,
+                "signature": _b64url_encode(signature),
+                "signature_fingerprint": hashlib.sha256(signature).hexdigest(),
+            },
+        }
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTED",
+            "attestation": attested,
+            "proof_fingerprint": payload["terminal_proof_fingerprint"],
+            "binding_fingerprint": payload["terminal_binding_fingerprint"],
+            "key_status": key_status,
+            "key_fingerprint": registry_fingerprint,
+            "registry_revision": payload["registry_revision"],
+            "key_set_fingerprint": payload["key_set_fingerprint"],
+            "trusted_key_source": payload["key_source"],
+            "trusted_key_version": payload["key_version"],
+            "attestation_id": replay["attestation_id"],
+            "nonce": replay["nonce"],
+            "issued_at": replay["issued_at"],
+            "expires_at": replay["expires_at"],
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_offline(
+        cls,
+        attestation,
+        public_keys_by_fingerprint,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_source_key_id="",
+        expected_source_nonce="",
+        expected_source_attestation_id="",
+        expected_verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+    ):
+        """Verify the terminal consumption-binding attestation fully offline."""
+        if not isinstance(attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "attestation_must_be_object",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if not isinstance(public_keys_by_fingerprint, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "public_keys_by_fingerprint_must_be_object",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        required = {"terminal_proof", "terminal_proof_attestation"}
+        if not required.issubset(attestation):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "attestation_structure_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        terminal_proof = attestation.get("terminal_proof")
+        terminal_attestation = attestation.get("terminal_proof_attestation")
+        if not isinstance(terminal_proof, dict) or not isinstance(terminal_attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "attestation_structure_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        schema_version = int(terminal_attestation.get("schema_version", 0) or 0)
+        if schema_version != 2:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "unsupported_attestation_schema",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if terminal_attestation.get("attestation_type") != "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_TRUSTED_KEY_ATTESTATION":
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "attestation_type_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if terminal_attestation.get("algorithm") != IDENTITY_ATTESTATION_ALGORITHM_ED25519:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "unsupported_attestation_algorithm",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        key_fingerprint = str(terminal_attestation.get("key_fingerprint", "") or "").strip().lower()
+        public_key = public_keys_by_fingerprint.get(key_fingerprint)
+        if public_key is None:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "attestation_public_key_missing",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        replay = cls._verify_decision_attestation_replay_binding(
+            terminal_attestation,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            verification_time=expected_verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not replay.get("success"):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": replay.get("reason", "replay_binding_invalid"),
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        terminal_verification = cls.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+            terminal_proof,
+            public_keys_by_fingerprint,
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_source_key_id,
+            expected_nonce=expected_source_nonce,
+            expected_attestation_id=expected_source_attestation_id,
+            verification_time=expected_verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not terminal_verification.get("success"):
+            return {
+                **terminal_verification,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "terminal_proof_invalid",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        expected_proof_fingerprint = str(terminal_attestation.get("terminal_proof_fingerprint", "") or "").strip().lower()
+        if expected_proof_fingerprint != str(terminal_verification.get("proof_fingerprint", "") or "").strip().lower():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "terminal_proof_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        payload = dict(terminal_attestation)
+        signature_b64 = payload.pop("signature", "")
+        signature_fingerprint = str(payload.pop("signature_fingerprint", "") or "").strip().lower()
+        actual_proof_fp = str(terminal_verification.get("proof_fingerprint", "") or "").strip().lower()
+        actual_binding_fp = str(terminal_verification.get("binding_fingerprint", "") or "").strip().lower()
+        checks = {
+            "terminal_binding_fingerprint": actual_binding_fp,
+            "source_proof_fingerprint": str(terminal_verification.get("source_proof_fingerprint", "") or "").strip().lower(),
+            "source_binding_fingerprint": str(terminal_verification.get("source_binding_fingerprint", "") or "").strip().lower(),
+            "bundle_id": str(terminal_verification.get("bundle_id", "") or "").strip(),
+            "bundle_fingerprint": str(terminal_verification.get("bundle_fingerprint", "") or "").strip().lower(),
+            "chain_fingerprint": str(terminal_verification.get("chain_fingerprint", "") or "").strip().lower(),
+            "proof_count": int(terminal_verification.get("proof_count", 0) or 0),
+            "source_attestation_id": str(terminal_verification.get("attestation_id", "") or "").strip(),
+            "source_nonce": str(terminal_verification.get("nonce", "") or ""),
+            "consumption_attestation_id": str(terminal_verification.get("consumption_attestation_id", "") or "").strip(),
+            "consumption_nonce": str(terminal_verification.get("consumption_nonce", "") or ""),
+            "consumed_at": terminal_verification.get("consumed_at"),
+            "consumption_audit_sequence": terminal_verification.get("consumption_audit_sequence"),
+            "consumption_audit_previous_hash": str(terminal_verification.get("consumption_audit_previous_hash", "") or "").strip().lower(),
+            "consumption_audit_record_hash": str(terminal_verification.get("consumption_audit_record_hash", "") or "").strip().lower(),
+        }
+        for field, expected_value in checks.items():
+            if terminal_attestation.get(field) != expected_value:
+                return {
+                    "success": False,
+                    "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                    "reason": f"{field}_mismatch",
+                    "offline": True,
+                    "read_only": True,
+                    "authoritative_state_mutated": False,
+                }
+        if terminal_attestation.get("issuer", "").strip().rstrip("/") != str(expected_issuer or terminal_attestation.get("issuer", "")).strip().rstrip("/"):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "issuer_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        if expected_key_id and str(terminal_attestation.get("key_id", "") or "").strip() != str(expected_key_id).strip():
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "key_id_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        try:
+            signature = _b64url_decode(signature_b64)
+            if not signature:
+                raise ValueError("empty signature")
+            public_key.verify(signature, _canonical_json(payload).encode("utf-8"))
+        except Exception:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "signature_verification_failed",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        actual_signature_fp = hashlib.sha256(signature).hexdigest()
+        if signature_fingerprint and signature_fingerprint != actual_signature_fp:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "signature_fingerprint_mismatch",
+                "offline": True,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+
+        return {
+            "success": True,
+            "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_OFFLINE_VERIFIED",
+            "issuer": terminal_attestation.get("issuer", ""),
+            "key_id": terminal_attestation.get("key_id", ""),
+            "key_fingerprint": key_fingerprint,
+            "proof_fingerprint": actual_proof_fp,
+            "binding_fingerprint": actual_binding_fp,
+            "signature_fingerprint": actual_signature_fp,
+            "attestation_id": replay["attestation_id"],
+            "nonce": replay["nonce"],
+            "issued_at": replay["issued_at"],
+            "expires_at": replay["expires_at"],
+            "terminal_proof": terminal_verification,
+            "offline": True,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
+    @classmethod
+    def verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_with_registry(
+        cls,
+        attestation,
+        registry,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        expected_source_key_id="",
+        expected_source_nonce="",
+        expected_source_attestation_id="",
+        expected_verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+    ):
+        """Verify terminal proof attestation and current trusted-key provenance."""
+        if not isinstance(registry, TrustedAttestationKeyRegistry):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_registry_required",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        wrapper = attestation if isinstance(attestation, dict) else {}
+        terminal_attestation = wrapper.get("terminal_proof_attestation") if isinstance(wrapper, dict) else None
+        if not isinstance(terminal_attestation, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "terminal_proof_attestation_missing",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        key_id = str(terminal_attestation.get("key_id", "") or "").strip()
+        discovered = registry.discover_key(key_id, IDENTITY_ATTESTATION_ALGORITHM_ED25519)
+        if not isinstance(discovered, dict):
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_not_found",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        metadata = discovered.get("metadata") or {}
+        public_key = discovered.get("public_key")
+        fingerprint = str(metadata.get("fingerprint", "") or "").strip().lower()
+        if public_key is None or not fingerprint:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_missing_public_key",
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        verified = cls.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_offline(
+            wrapper,
+            {fingerprint: public_key},
+            expected_bundle_id=expected_bundle_id,
+            expected_issuer=expected_issuer,
+            expected_key_id=expected_key_id,
+            expected_nonce=expected_nonce,
+            expected_attestation_id=expected_attestation_id,
+            expected_source_key_id=expected_source_key_id,
+            expected_source_nonce=expected_source_nonce,
+            expected_source_attestation_id=expected_source_attestation_id,
+            expected_verification_time=expected_verification_time,
+            clock_skew_seconds=clock_skew_seconds,
+        )
+        if not verified.get("success"):
+            return verified
+        key_status = normalize_attestation_key_status(metadata.get("status"))
+        if key_status not in {IDENTITY_KEY_STATUS_ACTIVE, IDENTITY_KEY_STATUS_GRACE}:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "trusted_key_status_not_allowed",
+                "key_status": key_status,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        recorded = {
+            "key_fingerprint": str(terminal_attestation.get("key_fingerprint", "") or "").strip().lower(),
+            "registry_revision": terminal_attestation.get("registry_revision"),
+            "key_set_fingerprint": str(terminal_attestation.get("key_set_fingerprint", "") or "").strip().lower(),
+            "key_source": str(terminal_attestation.get("key_source", "") or "").strip(),
+            "key_version": str(terminal_attestation.get("key_version", "") or "").strip(),
+        }
+        current = {
+            "key_fingerprint": fingerprint,
+            "registry_revision": metadata.get("registry_revision"),
+            "key_set_fingerprint": str(metadata.get("key_set_fingerprint", "") or "").strip().lower(),
+            "key_source": str(metadata.get("source", "") or "").strip(),
+            "key_version": str(metadata.get("version", "") or "").strip(),
+        }
+        if recorded != current:
+            return {
+                "success": False,
+                "status": "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_ATTESTATION_INVALID",
+                "reason": "registry_provenance_mismatch",
+                "recorded_provenance": recorded,
+                "current_registry_provenance": current,
+                "read_only": True,
+                "authoritative_state_mutated": False,
+            }
+        return {
+            **verified,
+            "key_status": key_status,
+            "current_registry_binding": True,
+            "offline": False,
+            "read_only": True,
+            "authoritative_state_mutated": False,
+        }
+
     @classmethod
     def verify_decision_attestation_consumption_proof_bundle_attestation_offline(
         cls,
@@ -7990,6 +10716,223 @@ class OIDCDiscoveryJWKSSource:
                         return {
                             "success": False,
                             "status": "DECISION_ATTESTATION_CONSUMPTION_AUDIT_EVIDENCE_ATTESTATION_CONSUMPTION_INVALID",
+                            "reason": "authoritative_trust_state_unavailable",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    return _consume_current_state()
+
+        with self._refresh_lock:
+            return _consume_current_state()
+
+
+    def consume_decision_attestation_consumption_proof_bundle_attestation(
+        self,
+        attested_bundle,
+        *,
+        expected_bundle_id="",
+        expected_issuer="",
+        expected_key_id="",
+        expected_nonce="",
+        expected_attestation_id="",
+        verification_time=None,
+        clock_skew_seconds=DEFAULT_JWT_CLOCK_SKEW_SECONDS,
+        require_current_registry_binding=True,
+    ):
+        """Verify and consume a replay-bound proof-bundle attestation exactly once.
+
+        The existing trusted-registry consumption ledger, immutable consumption
+        audit chain, persistent trust-state file, and inter-process lock are
+        reused. No new storage is introduced. Only schema-v2 bundle attestations
+        participate in one-time consumption so schema-v1 remains verification-only
+        and backward compatible.
+        """
+        bundle_attestation = attested_bundle.get("bundle_attestation") if isinstance(attested_bundle, dict) else None
+        if not isinstance(bundle_attestation, dict):
+            return {
+                "success": False,
+                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
+                "reason": "bundle_attestation_missing",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        try:
+            schema_version = int(bundle_attestation.get("schema_version", 0) or 0)
+        except (TypeError, ValueError):
+            schema_version = 0
+        if schema_version != 2:
+            return {
+                "success": False,
+                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
+                "reason": "one_time_consumption_requires_schema_v2",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        attestation_id = str(bundle_attestation.get("attestation_id", "") or "").strip()
+        nonce = str(bundle_attestation.get("nonce", "") or "").strip()
+        if not attestation_id or not nonce:
+            return {
+                "success": False,
+                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
+                "reason": "replay_binding_missing",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+        if expected_attestation_id and attestation_id != str(expected_attestation_id).strip():
+            return {
+                "success": False,
+                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
+                "reason": "attestation_id_mismatch",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+        if expected_nonce and nonce != str(expected_nonce).strip():
+            return {
+                "success": False,
+                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
+                "reason": "nonce_mismatch",
+                "read_only": False,
+                "authoritative_state_mutated": False,
+            }
+
+        def _consume_current_state():
+            verification = self.__class__.verify_decision_attestation_consumption_proof_bundle_attestation_with_registry(
+                attested_bundle,
+                self.registry,
+                expected_bundle_id=expected_bundle_id,
+                expected_issuer=expected_issuer,
+                expected_key_id=expected_key_id,
+                expected_nonce=expected_nonce,
+                expected_attestation_id=expected_attestation_id,
+                require_current_registry_binding=require_current_registry_binding,
+                expected_verification_time=verification_time,
+                clock_skew_seconds=clock_skew_seconds,
+            )
+            if not verification.get("success"):
+                return {
+                    **verification,
+                    "read_only": False,
+                    "authoritative_state_mutated": False,
+                }
+
+            bundle_fingerprint = str(verification.get("bundle_fingerprint", "") or "").strip().lower()
+            event_time = time.time() if verification_time is None else verification_time
+            with self.registry._consumption_lock:
+                existing = self.registry.get_consumed_decision_attestation(attestation_id)
+                if existing is not None:
+                    audit = self.registry._append_decision_attestation_consumption_audit(
+                        event_type="CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAY_REJECTED",
+                        attestation_id=attestation_id,
+                        decision_fingerprint=bundle_fingerprint,
+                        nonce=nonce,
+                        consumed_at=event_time,
+                        reason="proof_bundle_attestation_already_consumed",
+                        previous_consumed_record=existing,
+                    )
+                    if not audit.get("success"):
+                        return {
+                            **audit,
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    if self.state_path:
+                        try:
+                            self._persist_state()
+                        except Exception as exc:
+                            self._load_persisted_state_unlocked()
+                            return {
+                                "success": False,
+                                "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_FAILED",
+                                "reason": "replay_audit_persistence_failed",
+                                "error": str(exc)[:300],
+                                "read_only": False,
+                                "authoritative_state_mutated": False,
+                            }
+                    return {
+                        "success": False,
+                        "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAYED",
+                        "reason": "attestation_already_consumed",
+                        "attestation_id": attestation_id,
+                        "bundle_id": verification.get("bundle_id", ""),
+                        "bundle_fingerprint": bundle_fingerprint,
+                        "consumed_record": existing,
+                        "audit_record": audit.get("record"),
+                        "read_only": False,
+                        "authoritative_state_mutated": True,
+                    }
+
+                claim = self.registry.consume_decision_attestation(
+                    attestation_id,
+                    bundle_fingerprint,
+                    nonce=nonce,
+                    consumed_at=event_time,
+                )
+                if not claim.get("success"):
+                    return {
+                        **claim,
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                audit = self.registry._append_decision_attestation_consumption_audit(
+                    event_type="CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED",
+                    attestation_id=attestation_id,
+                    decision_fingerprint=bundle_fingerprint,
+                    nonce=nonce,
+                    consumed_at=event_time,
+                    reason="one_time_consumption",
+                )
+                if not audit.get("success"):
+                    self.registry._consumed_decision_attestations.pop(attestation_id, None)
+                    return {
+                        **audit,
+                        "read_only": False,
+                        "authoritative_state_mutated": False,
+                    }
+
+                if self.state_path:
+                    try:
+                        self._persist_state()
+                    except OIDCTrustStateConflictError:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONFLICT",
+                            "reason": "durable_consumption_commit_conflict",
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+                    except Exception as exc:
+                        self._load_persisted_state_unlocked()
+                        return {
+                            "success": False,
+                            "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_FAILED",
+                            "reason": "durable_consumption_commit_failed",
+                            "error": str(exc)[:300],
+                            "read_only": False,
+                            "authoritative_state_mutated": False,
+                        }
+
+                return {
+                    **verification,
+                    "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED",
+                    "consumption": claim,
+                    "audit_record": audit.get("record"),
+                    "read_only": False,
+                    "authoritative_state_mutated": True,
+                }
+
+        if self.state_path:
+            from memory_storage import interprocess_lock
+            with self._refresh_lock:
+                with interprocess_lock(self.state_lock_path, timeout_seconds=self.state_lock_timeout_seconds):
+                    latest = self._load_persisted_state_unlocked()
+                    if not latest.get("loaded"):
+                        return {
+                            "success": False,
+                            "status": "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMPTION_INVALID",
                             "reason": "authoritative_trust_state_unavailable",
                             "read_only": False,
                             "authoritative_state_mutated": False,

@@ -3381,6 +3381,125 @@ def _decision_attestation_evidence_concurrency_worker(state_path, attested_evide
         })
 
 
+
+
+def _decision_attestation_consumption_proof_bundle_binding_concurrency_worker(state_path, proof, worker_id, result_queue):
+    try:
+        issuer = "https://issuer.test/decision-consumption-proof-bundle-binding-consumption"
+        source = OIDCDiscoveryJWKSSource(
+            issuer,
+            TrustedAttestationKeyRegistry(),
+            state_path=state_path,
+            fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+            now_fn=lambda: 59000.0 + worker_id,
+        )
+        attestation = proof.get("attested_bundle", {}).get("bundle_attestation", {})
+        binding = proof.get("binding", {})
+        result = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+            proof,
+            expected_bundle_id=str(binding.get("bundle_id", "") or ""),
+            expected_issuer=issuer,
+            expected_key_id=str(attestation.get("key_id", "") or ""),
+            expected_nonce=str(attestation.get("nonce", "") or ""),
+            expected_attestation_id=str(attestation.get("attestation_id", "") or ""),
+            verification_time=59000.0,
+            clock_skew_seconds=0,
+        )
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": bool(result.get("success")),
+            "status": result.get("status"),
+            "reason": result.get("reason"),
+            "audit_sequence": (result.get("audit_record") or {}).get("sequence"),
+        })
+    except Exception as exc:
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": False,
+            "status": "WORKER_EXCEPTION",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "audit_sequence": None,
+        })
+
+
+
+def _decision_attestation_consumption_binding_consumption_binding_concurrency_worker(state_path, proof, worker_id, result_queue):
+    try:
+        issuer = "https://issuer.test/decision-consumption-proof-bundle-binding-consumption"
+        source = OIDCDiscoveryJWKSSource(
+            issuer,
+            TrustedAttestationKeyRegistry(),
+            state_path=state_path,
+            fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+            now_fn=lambda: 60100.0 + worker_id,
+        )
+        attested_bundle = proof.get("source_proof", {}).get("attested_bundle", {})
+        attestation = attested_bundle.get("bundle_attestation", {}) if isinstance(attested_bundle, dict) else {}
+        binding = proof.get("binding", {})
+        result = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+            proof,
+            expected_bundle_id=str(binding.get("bundle_id", "") or ""),
+            expected_issuer=issuer,
+            expected_key_id=str(attestation.get("key_id", "") or ""),
+            expected_nonce=str(attestation.get("nonce", "") or ""),
+            expected_attestation_id=str(attestation.get("attestation_id", "") or ""),
+            expected_key_fingerprint=str(binding.get("key_fingerprint", "") or ""),
+            verification_time=60100.0,
+            clock_skew_seconds=0,
+        )
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": bool(result.get("success")),
+            "status": result.get("status"),
+            "reason": result.get("reason"),
+            "audit_sequence": (result.get("audit_record") or {}).get("sequence"),
+        })
+    except Exception as exc:
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": False,
+            "status": "WORKER_EXCEPTION",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "audit_sequence": None,
+        })
+
+
+def _decision_attestation_consumption_proof_bundle_concurrency_worker(state_path, attested_bundle, worker_id, result_queue):
+    try:
+        issuer = "https://issuer.test/decision-consumption-proof-bundle-consume"
+        source = OIDCDiscoveryJWKSSource(
+            issuer,
+            TrustedAttestationKeyRegistry(),
+            state_path=state_path,
+            fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+            now_fn=lambda: 57100.0 + worker_id,
+        )
+        result = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+            attested_bundle,
+            expected_bundle_id="bundle-concurrency-test-001",
+            expected_issuer=issuer,
+            expected_key_id="proof-bundle-consume-key",
+            expected_nonce="bundle-concurrency-nonce",
+            expected_attestation_id="bundle-concurrency-attestation",
+            verification_time=57100.0,
+            clock_skew_seconds=0,
+        )
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": bool(result.get("success")),
+            "status": result.get("status"),
+            "reason": result.get("reason"),
+            "audit_sequence": (result.get("audit_record") or {}).get("sequence"),
+        })
+    except Exception as exc:
+        result_queue.put({
+            "worker_id": worker_id,
+            "success": False,
+            "status": "WORKER_EXCEPTION",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "audit_sequence": None,
+        })
+
 def test_decision_attestation_consumption_status_and_read_only_proof(tmp_dir):
     issuer = "https://issuer.test/decision-consumption-status"
     state_path = os.path.join(tmp_dir, "memory_oidc_decision_consumption_status_state.json")
@@ -4333,6 +4452,1295 @@ def test_decision_attestation_consumption_proof_bundle_attestation_replay_and_te
     print("PASS: wrong nonce, attestation ID, not-before, and expiration fail closed")
     print("PASS: tampered replay metadata fails signature verification")
     print("PASS: schema-v1 proof-bundle attestations remain backward compatible")
+
+
+def test_decision_attestation_consumption_proof_bundle_attestation_one_time_consumption(tmp_dir):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    import multiprocessing
+
+    issuer = "https://issuer.test/decision-consumption-proof-bundle-consume"
+    state_path = os.path.join(tmp_dir, "memory_oidc_decision_consumption_proof_bundle_consume_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 56000.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "proof-bundle-consume-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="proof-bundle-consume-seed",
+        decision_fingerprint="proof-bundle-consume-seed-fp",
+        nonce="proof-bundle-consume-seed-nonce",
+        consumed_at=56001.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    exported = registry.export_decision_attestation_consumption_audit_evidence(
+        start_sequence=1,
+        end_sequence=1,
+    )
+    expect(exported["success"] is True, f"Bundle-consumption evidence export failed: {exported}")
+
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"],
+        private_key,
+        registry,
+        key_id="proof-bundle-consume-key",
+        issuer=issuer,
+        nonce="bundle-consume-evidence-nonce",
+        attestation_id="bundle-consume-evidence-id",
+        issued_at=55900.0,
+        expires_at=56200.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation creation failed: {evidence_attestation}")
+
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-consume-evidence-nonce",
+        expected_attestation_id="bundle-consume-evidence-id",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence prerequisite consumption failed: {consumed_evidence}")
+
+    proof_export = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-consume-evidence-nonce",
+        expected_attestation_id="bundle-consume-evidence-id",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(proof_export["success"] is True, f"Bundle-consumption proof export failed: {proof_export}")
+
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [proof_export["proof"]],
+        bundle_id="bundle-consume-test-001",
+        created_at=56060.0,
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+
+    attested_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"],
+        private_key,
+        registry,
+        key_id="proof-bundle-consume-key",
+        issuer=issuer,
+        nonce="bundle-consume-nonce",
+        attestation_id="bundle-consume-attestation-id",
+        issued_at=55990.0,
+        expires_at=56200.0,
+        expected_verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(attested_bundle["success"] is True, f"Replay-bound bundle attestation creation failed: {attested_bundle}")
+    signed_bundle = attested_bundle["bundle"]
+
+    before_consume = Path(state_path).read_bytes()
+    consumed = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-consume-nonce",
+        expected_attestation_id="bundle-consume-attestation-id",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(consumed["success"] is True, f"Bundle attestation consumption failed: {consumed}")
+    expect(consumed["status"] == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED", "Bundle consumption returned the wrong success status.")
+    expect(consumed["consumption"]["decision_fingerprint"] == signed_bundle["bundle_fingerprint"], "Bundle fingerprint was not bound to the one-time claim.")
+    expect(consumed["read_only"] is False and consumed["authoritative_state_mutated"] is True, "Successful bundle consumption did not report mutation semantics.")
+    expect(Path(state_path).read_bytes() != before_consume, "Successful bundle consumption did not persist authoritative state.")
+
+    replay = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-consume-nonce",
+        expected_attestation_id="bundle-consume-attestation-id",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not replay["success"] and replay["status"] == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAYED", f"Bundle replay was not rejected: {replay}")
+    expect(replay["authoritative_state_mutated"] is True, "Bundle replay audit was not reported as persisted mutation.")
+
+    status = registry.get_decision_attestation_consumption_status("bundle-consume-attestation-id")
+    expect(status["success"] is True and status["consumed"] is True, f"Bundle consumption status was not readable: {status}")
+    expect(status["consumption_audit_record"]["event_type"] == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED", "Generic consumption status did not recognize the bundle consume event.")
+    expect(len(status["replay_events"]) == 1, "Generic consumption status did not expose the bundle replay event.")
+    expect(status["read_only"] is True and status["authoritative_state_mutated"] is False, "Bundle consumption status was not read-only.")
+
+    restored_registry = TrustedAttestationKeyRegistry()
+    restored_source = OIDCDiscoveryJWKSSource(
+        issuer,
+        restored_registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 56050.0,
+    )
+    restored_replay = restored_source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-consume-nonce",
+        expected_attestation_id="bundle-consume-attestation-id",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not restored_replay["success"] and restored_replay["status"] == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAYED", f"Bundle replay was not preserved across restart: {restored_replay}")
+
+    tampered = json.loads(json.dumps(signed_bundle))
+    tampered["bundle_attestation"]["nonce"] = "tampered-bundle-consume-nonce"
+    before_tamper = Path(state_path).read_bytes()
+    tampered_result = restored_source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        tampered,
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not tampered_result["success"] and tampered_result["reason"] == "signature_verification_failed", f"Tampered bundle attestation was accepted: {tampered_result}")
+    expect(Path(state_path).read_bytes() == before_tamper, "Tampered bundle verification mutated persistent state.")
+
+    legacy = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key(
+        composed["bundle"],
+        private_key,
+        restored_registry,
+        key_id="proof-bundle-consume-key",
+        issuer=issuer,
+        expected_verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(legacy["success"] is True, f"Legacy bundle attestation creation failed: {legacy}")
+    legacy_result = restored_source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        legacy["bundle"],
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not legacy_result["success"] and legacy_result["reason"] == "one_time_consumption_requires_schema_v2", f"Schema-v1 bundle attestation was consumed: {legacy_result}")
+
+    short_lived = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"],
+        private_key,
+        restored_registry,
+        key_id="proof-bundle-consume-key",
+        issuer=issuer,
+        nonce="bundle-consume-expired-nonce",
+        attestation_id="bundle-consume-expired-id",
+        issued_at=55990.0,
+        expires_at=56100.0,
+        expected_verification_time=56050.0,
+        clock_skew_seconds=0,
+    )
+    expect(short_lived["success"] is True, f"Short-lived bundle attestation creation failed: {short_lived}")
+    expired_before = Path(state_path).read_bytes()
+    expired_result = restored_source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        short_lived["bundle"],
+        expected_bundle_id="bundle-consume-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-consume-key",
+        verification_time=56150.0,
+        clock_skew_seconds=0,
+    )
+    expect(not expired_result["success"] and expired_result["reason"] == "attestation_expired", f"Expired bundle attestation was not rejected: {expired_result}")
+    expect(Path(state_path).read_bytes() == expired_before, "Expired bundle verification mutated persistent state.")
+
+    concurrency_issuer = issuer
+    concurrency_source = OIDCDiscoveryJWKSSource(
+        concurrency_issuer,
+        restored_registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 57050.0,
+    )
+    concurrency_evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"],
+        private_key,
+        restored_registry,
+        key_id="proof-bundle-consume-key",
+        issuer=concurrency_issuer,
+        nonce="bundle-concurrency-evidence-nonce",
+        attestation_id="bundle-concurrency-evidence-id",
+        issued_at=56900.0,
+        expires_at=57300.0,
+    )
+    expect(concurrency_evidence_attestation["success"] is True, f"Concurrency evidence attestation creation failed: {concurrency_evidence_attestation}")
+    concurrency_evidence_consumed = concurrency_source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        concurrency_evidence_attestation["evidence"],
+        expected_issuer=concurrency_issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-concurrency-evidence-nonce",
+        expected_attestation_id="bundle-concurrency-evidence-id",
+        verification_time=57050.0,
+        clock_skew_seconds=0,
+    )
+    expect(concurrency_evidence_consumed["success"] is True, f"Concurrency evidence consumption failed: {concurrency_evidence_consumed}")
+    concurrency_proof_export = concurrency_source.export_decision_attestation_consumption_binding_proof(
+        concurrency_evidence_attestation["evidence"],
+        expected_issuer=concurrency_issuer,
+        expected_key_id="proof-bundle-consume-key",
+        expected_nonce="bundle-concurrency-evidence-nonce",
+        expected_attestation_id="bundle-concurrency-evidence-id",
+        verification_time=57050.0,
+        clock_skew_seconds=0,
+    )
+    expect(concurrency_proof_export["success"] is True, f"Concurrency proof export failed: {concurrency_proof_export}")
+    concurrency_composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [concurrency_proof_export["proof"]],
+        bundle_id="bundle-concurrency-test-001",
+        created_at=57070.0,
+    )
+    expect(concurrency_composed["success"] is True, f"Concurrency bundle composition failed: {concurrency_composed}")
+    concurrency_attested = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        concurrency_composed["bundle"],
+        private_key,
+        restored_registry,
+        key_id="proof-bundle-consume-key",
+        issuer=concurrency_issuer,
+        nonce="bundle-concurrency-nonce",
+        attestation_id="bundle-concurrency-attestation",
+        issued_at=57000.0,
+        expires_at=57300.0,
+        expected_verification_time=57100.0,
+        clock_skew_seconds=0,
+    )
+    expect(concurrency_attested["success"] is True, f"Concurrency bundle attestation creation failed: {concurrency_attested}")
+
+    worker_count = 8
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    processes = [
+        context.Process(
+            target=_decision_attestation_consumption_proof_bundle_concurrency_worker,
+            args=(state_path, concurrency_attested["bundle"], index, result_queue),
+        )
+        for index in range(1, worker_count + 1)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(30)
+        expect(not process.is_alive(), "Concurrent bundle-consumption worker did not terminate.")
+        expect(process.exitcode == 0, f"Concurrent bundle-consumption worker failed: exit={process.exitcode}")
+
+    results = [result_queue.get(timeout=5) for _ in range(worker_count)]
+    expect(all(result.get("status") != "WORKER_EXCEPTION" for result in results), f"Concurrent bundle-consumption worker raised an exception: {results}")
+    consumed_results = [result for result in results if result.get("status") == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_CONSUMED"]
+    replay_results = [result for result in results if result.get("status") == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAYED"]
+    expect(len(consumed_results) == 1, f"Concurrent bundle one-time consumption accepted more than once: {results}")
+    expect(len(replay_results) == worker_count - 1, f"Concurrent bundle replay protection did not reject every loser: {results}")
+    expect(all(result.get("success") is False for result in replay_results), f"Bundle replay outcomes reported success: {replay_results}")
+
+    final_registry = TrustedAttestationKeyRegistry()
+    OIDCDiscoveryJWKSSource(
+        concurrency_issuer,
+        final_registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 57100.0,
+    )
+    final_status = final_registry.get_decision_attestation_consumption_status("bundle-concurrency-attestation")
+    expect(final_status["success"] is True and final_status["consumed"] is True, f"Concurrent bundle status was not durable: {final_status}")
+    expect(len(final_status["replay_events"]) == worker_count - 1, f"Concurrent bundle replay audit count mismatch: {final_status}")
+
+    print("PASS: proof-bundle attestations are consumed exactly once")
+    print("PASS: bundle one-time consumption survives persistent trust-state restart")
+    print("PASS: schema-v1, tampered, and expired bundle attestations fail closed without claiming consumption")
+    print("PASS: generic read-only consumption status recognizes bundle consume/replay audit events")
+    print("PASS: concurrent bundle consumption is serialized across processes")
+    print("PASS: exactly one concurrent bundle consumer succeeds and every loser is rejected as replay")
+    print("PASS: concurrent bundle consumption preserves durable audit history after restart")
+
+
+def test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_one_time_consumption(tmp_dir):
+    import multiprocessing
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    issuer = "https://issuer.test/decision-consumption-proof-bundle-binding-consumption"
+    state_path = os.path.join(tmp_dir, "memory_oidc_decision_consumption_proof_bundle_binding_consumption_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 59000.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "proof-bundle-binding-consumption-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="binding-consumption-seed",
+        decision_fingerprint="binding-consumption-seed-fp",
+        nonce="binding-consumption-seed-nonce",
+        consumed_at=59001.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    exported = registry.export_decision_attestation_consumption_audit_evidence(start_sequence=1, end_sequence=1)
+    expect(exported["success"] is True, f"Seed evidence export failed: {exported}")
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"], private_key, registry,
+        key_id="proof-bundle-binding-consumption-key", issuer=issuer,
+        nonce="binding-consumption-evidence-nonce", attestation_id="binding-consumption-evidence-id",
+        issued_at=58900.0, expires_at=59200.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation failed: {evidence_attestation}")
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"], expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="binding-consumption-evidence-nonce", expected_attestation_id="binding-consumption-evidence-id",
+        verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence consumption failed: {consumed_evidence}")
+    evidence_binding = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"], expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="binding-consumption-evidence-nonce", expected_attestation_id="binding-consumption-evidence-id",
+        verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(evidence_binding["success"] is True, f"Evidence binding export failed: {evidence_binding}")
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [evidence_binding["proof"]], bundle_id="bundle-binding-consumption-test-001", created_at=59030.0
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+    attested_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"], private_key, registry, key_id="proof-bundle-binding-consumption-key", issuer=issuer,
+        nonce="proof-bundle-binding-consumption-nonce", attestation_id="proof-bundle-binding-consumption-attestation",
+        issued_at=58990.0, expires_at=59200.0, expected_verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(attested_bundle["success"] is True, f"Bundle attestation failed: {attested_bundle}")
+    signed_bundle = attested_bundle["bundle"]
+    consumed_bundle = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle, expected_bundle_id="bundle-binding-consumption-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="proof-bundle-binding-consumption-nonce",
+        expected_attestation_id="proof-bundle-binding-consumption-attestation", verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_bundle["success"] is True, f"Bundle consumption failed: {consumed_bundle}")
+    binding = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle, expected_bundle_id="bundle-binding-consumption-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="proof-bundle-binding-consumption-nonce",
+        expected_attestation_id="proof-bundle-binding-consumption-attestation", verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(binding["success"] is True, f"Bundle binding proof export failed: {binding}")
+    proof = binding["proof"]
+    proof_fingerprint = proof["proof_fingerprint"]
+    before = Path(state_path).read_bytes()
+    proof_fingerprint = proof["proof_fingerprint"]
+    consumption_id = f"proof-binding:{proof_fingerprint}"[:200]
+
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    worker_count = 6
+    processes = [
+        context.Process(
+            target=_decision_attestation_consumption_proof_bundle_binding_concurrency_worker,
+            args=(state_path, proof, index, result_queue),
+        )
+        for index in range(worker_count)
+    ]
+    for process in processes:
+        process.start()
+    for process in processes:
+        process.join(30)
+        expect(not process.is_alive(), "Binding-proof concurrent worker did not terminate.")
+        expect(process.exitcode == 0, f"Binding-proof concurrent worker failed: exit={process.exitcode}")
+    results = [result_queue.get(timeout=5) for _ in range(worker_count)]
+    expect(not any(result.get("status") == "WORKER_EXCEPTION" for result in results), f"Binding-proof worker exception: {results}")
+    successes = [result for result in results if result.get("status") == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED" and result.get("success") is True]
+    replays = [result for result in results if result.get("status") == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAYED" and result.get("success") is False]
+    expect(len(successes) == 1, f"Concurrent binding-proof consumption did not produce exactly one success: {results}")
+    expect(len(replays) == worker_count - 1, f"Concurrent binding-proof replay protection did not reject every loser: {results}")
+
+    restarted_registry = TrustedAttestationKeyRegistry()
+    restarted_source = OIDCDiscoveryJWKSSource(
+        issuer, restarted_registry, state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")), now_fn=lambda: 59022.0,
+    )
+    status = restarted_registry.get_decision_attestation_consumption_status(consumption_id)
+    expect(status["success"] is True and status["status"] == "DECISION_ATTESTATION_CONSUMED", f"Binding proof status invalid: {status}")
+    expect(status["consumed_record"]["decision_fingerprint"] == proof_fingerprint, "Consumed binding proof fingerprint mismatch.")
+    expect(Path(state_path).read_bytes() != before, "One-time consumption did not persist the authoritative claim.")
+
+    replay = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        proof, expected_bundle_id="bundle-binding-consumption-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="proof-bundle-binding-consumption-nonce",
+        expected_attestation_id="proof-bundle-binding-consumption-attestation", verification_time=59021.0, clock_skew_seconds=0,
+    )
+    expect(not replay["success"] and replay["status"] == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAYED", f"Binding proof replay accepted: {replay}")
+
+    replay_after_restart = restarted_source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        proof, expected_bundle_id="bundle-binding-consumption-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="proof-bundle-binding-consumption-nonce",
+        expected_attestation_id="proof-bundle-binding-consumption-attestation", verification_time=59022.0, clock_skew_seconds=0,
+    )
+    expect(not replay_after_restart["success"] and replay_after_restart["status"] == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAYED", f"Restart replay accepted: {replay_after_restart}")
+
+    tampered = json.loads(json.dumps(proof))
+    tampered["binding"]["bundle_fingerprint"] = "0" * 64
+    tampered_result = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        tampered, expected_bundle_id="bundle-binding-consumption-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="proof-bundle-binding-consumption-nonce",
+        expected_attestation_id="proof-bundle-binding-consumption-attestation", verification_time=59020.0, clock_skew_seconds=0,
+    )
+    expect(not tampered_result["success"] and tampered_result["reason"] == "proof_fingerprint_mismatch", f"Tampered binding proof was accepted: {tampered_result}")
+
+    audit = restarted_registry.get_decision_attestation_consumption_audit(attestation_id=consumption_id)
+    expect(audit["success"] is True, f"Binding-proof audit query failed: {audit}")
+    event_types = [record.get("event_type") for record in audit["records"]]
+    expect(event_types.count("DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMED") == 1, f"Binding-proof consume audit count invalid: {event_types}")
+    expect(event_types.count("DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_REPLAY_REJECTED") >= worker_count + 1, f"Binding-proof replay audit count invalid: {event_types}")
+
+    print("PASS: bundle-attestation consumption binding proofs are one-time consumable")
+    print("PASS: one-time binding-proof consumption survives restart and rejects tampering")
+    print("PASS: concurrent binding-proof consumption remains serialized by the existing ledger and audit chain")
+
+
+def test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(tmp_dir):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    issuer = "https://issuer.test/decision-consumption-proof-bundle-binding-consumption-binding"
+    state_path = os.path.join(tmp_dir, "memory_oidc_decision_consumption_proof_bundle_binding_consumption_binding_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 60000.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "proof-bundle-consumption-binding-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="consumption-binding-seed",
+        decision_fingerprint="consumption-binding-seed-fp",
+        nonce="consumption-binding-seed-nonce",
+        consumed_at=60001.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    exported = registry.export_decision_attestation_consumption_audit_evidence(start_sequence=1, end_sequence=1)
+    expect(exported["success"] is True, f"Seed evidence export failed: {exported}")
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"], private_key, registry,
+        key_id="proof-bundle-consumption-binding-key", issuer=issuer,
+        nonce="consumption-binding-evidence-nonce", attestation_id="consumption-binding-evidence-id",
+        issued_at=59900.0, expires_at=60200.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation failed: {evidence_attestation}")
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer, expected_key_id="proof-bundle-consumption-binding-key",
+        expected_nonce="consumption-binding-evidence-nonce", expected_attestation_id="consumption-binding-evidence-id",
+        verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence consumption failed: {consumed_evidence}")
+
+    evidence_binding = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer, expected_key_id="proof-bundle-consumption-binding-key",
+        expected_nonce="consumption-binding-evidence-nonce", expected_attestation_id="consumption-binding-evidence-id",
+        verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(evidence_binding["success"] is True, f"Evidence binding export failed: {evidence_binding}")
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [evidence_binding["proof"]], bundle_id="bundle-consumption-binding-test-001", created_at=60030.0
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+    attested_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"], private_key, registry,
+        key_id="proof-bundle-consumption-binding-key", issuer=issuer,
+        nonce="bundle-consumption-binding-nonce", attestation_id="bundle-consumption-binding-attestation",
+        issued_at=59990.0, expires_at=60200.0, expected_verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(attested_bundle["success"] is True, f"Bundle attestation failed: {attested_bundle}")
+    signed_bundle = attested_bundle["bundle"]
+    consumed_bundle = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_bundle["success"] is True, f"Bundle consumption failed: {consumed_bundle}")
+
+    bundle_binding = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(bundle_binding["success"] is True, f"Bundle binding proof export failed: {bundle_binding}")
+    binding_proof = bundle_binding["proof"]
+    consumed_binding_proof = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        binding_proof,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_binding_proof["success"] is True, f"Binding proof consumption failed: {consumed_binding_proof}")
+
+    before_export = Path(state_path).read_bytes()
+    exported_consumption_binding = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        binding_proof,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(exported_consumption_binding["success"] is True, f"Consumption-binding export failed: {exported_consumption_binding}")
+    expect(exported_consumption_binding["read_only"] is True, "Consumption-binding export was not read-only.")
+    expect(exported_consumption_binding["authoritative_state_mutated"] is False, "Consumption-binding export mutated authoritative state.")
+    expect(Path(state_path).read_bytes() == before_export, "Consumption-binding export mutated persistent trust state.")
+
+    proof = exported_consumption_binding["proof"]
+    key_fingerprint = signed_bundle["bundle_attestation"]["key_fingerprint"]
+    offline = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+        proof,
+        {key_fingerprint: private_key.public_key()},
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(offline["success"] is True, f"Offline consumption-binding verification failed: {offline}")
+    expect(offline["offline"] is True and offline["read_only"] is True, "Offline verification mutation semantics were incorrect.")
+    expect(offline["authoritative_state_mutated"] is False, "Offline verification claimed authoritative mutation.")
+    expect(offline["source_proof_fingerprint"] == binding_proof["proof_fingerprint"], "Source proof fingerprint was not preserved.")
+    expect(offline["consumption_audit_record_hash"] == proof["binding"]["consumption_audit_record_hash"], "Consumption audit record hash was not preserved.")
+
+    before_repeat = Path(state_path).read_bytes()
+    repeated = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        binding_proof,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(repeated["success"] is True, f"Repeated consumption-binding export failed: {repeated}")
+    expect(repeated["proof"]["proof_fingerprint"] == proof["proof_fingerprint"], "Consumption-binding proof fingerprint was not deterministic.")
+    expect(repeated["proof"]["binding"]["binding_fingerprint"] == proof["binding"]["binding_fingerprint"], "Consumption-binding fingerprint was not deterministic.")
+    expect(Path(state_path).read_bytes() == before_repeat, "Repeated consumption-binding export mutated persistent trust state.")
+
+    tampered = json.loads(json.dumps(proof))
+    tampered["binding"]["consumption_audit_record_hash"] = "0" * 64
+    tampered_result = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_offline(
+        tampered,
+        {key_fingerprint: private_key.public_key()},
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(not tampered_result["success"] and tampered_result["reason"] in {"proof_fingerprint_mismatch", "binding_record_hash_mismatch"}, f"Tampered consumption-binding proof was accepted: {tampered_result}")
+
+    restarted_registry = TrustedAttestationKeyRegistry()
+    restarted_source = OIDCDiscoveryJWKSSource(
+        issuer, restarted_registry, state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")), now_fn=lambda: 60025.0,
+    )
+    restarted_export = restarted_source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        binding_proof,
+        expected_bundle_id="bundle-consumption-binding-test-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-consumption-binding-key", expected_nonce="bundle-consumption-binding-nonce",
+        expected_attestation_id="bundle-consumption-binding-attestation", verification_time=60020.0, clock_skew_seconds=0,
+    )
+    expect(restarted_export["success"] is True, f"Consumption-binding export after restart failed: {restarted_export}")
+    expect(restarted_export["proof"]["proof_fingerprint"] == proof["proof_fingerprint"], "Restart changed consumption-binding proof identity.")
+
+    print("PASS: binding-proof consumption is cryptographically bound to its authoritative one-time audit event")
+    print("PASS: binding-proof consumption proof verifies fully offline without authoritative state")
+    print("PASS: consumption-binding export is deterministic, read-only, restart-safe, and fail-closed on tampering")
+
+def test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_one_time_consumption(tmp_dir):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    import multiprocessing
+
+    issuer = "https://issuer.test/decision-consumption-proof-bundle-binding-consumption"
+    state_path = os.path.join(tmp_dir, "memory_oidc_binding_consumption_binding_one_time_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 60100.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "proof-bundle-binding-consumption-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="binding-consumption-seed",
+        decision_fingerprint="binding-consumption-seed-fp",
+        nonce="binding-consumption-seed-nonce",
+        consumed_at=60101.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    exported = registry.export_decision_attestation_consumption_audit_evidence(start_sequence=1, end_sequence=1)
+    expect(exported["success"] is True, f"Seed evidence export failed: {exported}")
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"], private_key, registry,
+        key_id="proof-bundle-binding-consumption-key", issuer=issuer,
+        nonce="binding-consumption-evidence-nonce", attestation_id="binding-consumption-evidence-id",
+        issued_at=60000.0, expires_at=60300.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation failed: {evidence_attestation}")
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"], expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="binding-consumption-evidence-nonce",
+        expected_attestation_id="binding-consumption-evidence-id",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence consumption failed: {consumed_evidence}")
+
+    evidence_binding = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"], expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="binding-consumption-evidence-nonce",
+        expected_attestation_id="binding-consumption-evidence-id",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(evidence_binding["success"] is True, f"Evidence binding export failed: {evidence_binding}")
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [evidence_binding["proof"]], bundle_id="bundle-binding-consumption-one-time-001", created_at=60130.0
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+    attested_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"], private_key, registry,
+        key_id="proof-bundle-binding-consumption-key", issuer=issuer,
+        nonce="bundle-binding-consumption-nonce", attestation_id="bundle-binding-consumption-attestation",
+        issued_at=60090.0, expires_at=60300.0,
+        expected_verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(attested_bundle["success"] is True, f"Bundle attestation failed: {attested_bundle}")
+    signed_bundle = attested_bundle["bundle"]
+    consumed_bundle = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(consumed_bundle["success"] is True, f"Bundle consumption failed: {consumed_bundle}")
+
+    binding_export = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(binding_export["success"] is True, f"Binding proof export failed: {binding_export}")
+    binding_proof = binding_export["proof"]
+    consumed_binding_proof = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        binding_proof,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(consumed_binding_proof["success"] is True, f"Binding proof consumption failed: {consumed_binding_proof}")
+
+    consumption_binding_export = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        binding_proof,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(consumption_binding_export["success"] is True, f"Consumption binding export failed: {consumption_binding_export}")
+    consumption_binding_proof = consumption_binding_export["proof"]
+    state_before_tamper = Path(state_path).read_bytes()
+
+    tampered = json.loads(json.dumps(consumption_binding_proof))
+    tampered["binding"]["consumption_audit_record_hash"] = "0" * 64
+    tampered_result = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        tampered,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(not tampered_result["success"], f"Tampered consumption-binding proof was accepted: {tampered_result}")
+    expect(Path(state_path).read_bytes() == state_before_tamper, "Tampered proof changed authoritative state.")
+
+    first = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        consumption_binding_proof,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(first["success"] is True, f"First consumption-binding proof consumption failed: {first}")
+    expect(first["status"] == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMED", "First consumption returned wrong status.")
+
+    replay = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        consumption_binding_proof,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(not replay["success"] and replay["status"] == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAYED", f"Replay was not rejected: {replay}")
+
+    consumption_id = f"binding-consumption-binding:{consumption_binding_proof['proof_fingerprint']}"
+    status = source.registry.get_decision_attestation_consumption_status(consumption_id, verify_integrity=True, include_replay_events=True)
+    expect(status["success"] is True and status["status"] == "DECISION_ATTESTATION_CONSUMED", f"Consumption status invalid: {status}")
+    expect(status["consumed_record"]["decision_fingerprint"] == consumption_binding_proof["proof_fingerprint"], "Consumed proof fingerprint mismatch.")
+
+    restarted_registry = TrustedAttestationKeyRegistry()
+    restarted_source = OIDCDiscoveryJWKSSource(
+        issuer, restarted_registry, state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")), now_fn=lambda: 60125.0,
+    )
+    restarted_replay = restarted_source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        consumption_binding_proof,
+        expected_bundle_id="bundle-binding-consumption-one-time-001", expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-consumption-key",
+        expected_nonce="bundle-binding-consumption-nonce",
+        expected_attestation_id="bundle-binding-consumption-attestation",
+        verification_time=60120.0, clock_skew_seconds=0,
+    )
+    expect(not restarted_replay["success"] and restarted_replay["status"] == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAYED", f"Restart replay was accepted: {restarted_replay}")
+
+    # Fresh proof: same architecture, different source bundle/attestation identity.
+    registry2 = TrustedAttestationKeyRegistry()
+    source2 = OIDCDiscoveryJWKSSource(
+        issuer, registry2,
+        state_path=state_path + ".concurrent",
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 60100.0,
+    )
+    registry2.refresh_from_jwks(
+        {"keys": [public_key_to_jwk(private_key.public_key(), "proof-bundle-binding-consumption-key", version="2026-09-25", status=IDENTITY_KEY_STATUS_ACTIVE)]},
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry2._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED", attestation_id="concurrency-seed", decision_fingerprint="concurrency-seed-fp", nonce="concurrency-seed-nonce", consumed_at=60101.0, reason="fixture"
+    )
+    source2._persist_state()
+    exported2 = registry2.export_decision_attestation_consumption_audit_evidence(start_sequence=1, end_sequence=1)
+    evidence2 = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported2["evidence"], private_key, registry2, key_id="proof-bundle-binding-consumption-key", issuer=issuer,
+        nonce="concurrency-evidence-nonce", attestation_id="concurrency-evidence-id", issued_at=60000.0, expires_at=60300.0,
+    )
+    source2.consume_decision_attestation_consumption_audit_evidence_attestation(evidence2["evidence"], expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="concurrency-evidence-nonce", expected_attestation_id="concurrency-evidence-id", verification_time=60120.0, clock_skew_seconds=0)
+    proof2 = source2.export_decision_attestation_consumption_binding_proof(evidence2["evidence"], expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="concurrency-evidence-nonce", expected_attestation_id="concurrency-evidence-id", verification_time=60120.0, clock_skew_seconds=0)["proof"]
+    bundle2 = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle([proof2], bundle_id="bundle-concurrency-binding-001", created_at=60130.0)["bundle"]
+    signed2 = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(bundle2, private_key, registry2, key_id="proof-bundle-binding-consumption-key", issuer=issuer, nonce="bundle-concurrency-nonce", attestation_id="bundle-concurrency-attestation", issued_at=60090.0, expires_at=60300.0, expected_verification_time=60120.0, clock_skew_seconds=0)["bundle"]
+    source2.consume_decision_attestation_consumption_proof_bundle_attestation(signed2, expected_bundle_id="bundle-concurrency-binding-001", expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="bundle-concurrency-nonce", expected_attestation_id="bundle-concurrency-attestation", verification_time=60120.0, clock_skew_seconds=0)
+    binding2 = source2.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(signed2, expected_bundle_id="bundle-concurrency-binding-001", expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="bundle-concurrency-nonce", expected_attestation_id="bundle-concurrency-attestation", verification_time=60120.0, clock_skew_seconds=0)["proof"]
+    source2.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(binding2, expected_bundle_id="bundle-concurrency-binding-001", expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="bundle-concurrency-nonce", expected_attestation_id="bundle-concurrency-attestation", verification_time=60120.0, clock_skew_seconds=0)
+    concurrent_proof = source2.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(binding2, expected_bundle_id="bundle-concurrency-binding-001", expected_issuer=issuer, expected_key_id="proof-bundle-binding-consumption-key", expected_nonce="bundle-concurrency-nonce", expected_attestation_id="bundle-concurrency-attestation", verification_time=60120.0, clock_skew_seconds=0)["proof"]
+
+    context = multiprocessing.get_context("spawn")
+    result_queue = context.Queue()
+    workers = [context.Process(target=_decision_attestation_consumption_binding_consumption_binding_concurrency_worker, args=(state_path + ".concurrent", concurrent_proof, index, result_queue)) for index in range(6)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(30)
+        expect(not worker.is_alive(), "Consumption-binding concurrency worker did not terminate.")
+        expect(worker.exitcode == 0, f"Consumption-binding concurrency worker failed: {worker.exitcode}")
+    results = [result_queue.get(timeout=5) for _ in workers]
+    expect(not any(item.get("status") == "WORKER_EXCEPTION" for item in results), f"Consumption-binding worker exception: {results}")
+    successes = [item for item in results if item.get("success") is True and item.get("status") == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_CONSUMED"]
+    replays = [item for item in results if item.get("success") is False and item.get("status") == "DECISION_ATTESTATION_CONSUMPTION_PROOF_BUNDLE_ATTESTATION_BINDING_PROOF_CONSUMPTION_BINDING_REPLAYED"]
+    expect(len(successes) == 1, f"Concurrent consumption did not produce exactly one success: {results}")
+    expect(len(replays) == 5, f"Concurrent replay protection did not reject all losers: {results}")
+
+    print("PASS: consumption-binding proofs are one-time consumable")
+    print("PASS: replay is rejected after restart and tampering fails closed")
+    print("PASS: concurrent consumption produces exactly one authoritative success")
+
+
+
+def test_terminal_consumption_binding_proof_trusted_key_attestation(tmp_dir):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    issuer = "https://issuer.test/terminal-consumption-binding-attestation"
+    state_path = os.path.join(tmp_dir, "memory_oidc_terminal_consumption_binding_attestation_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 61000.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "terminal-consumption-binding-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="terminal-seed",
+        decision_fingerprint="terminal-seed-fp",
+        nonce="terminal-seed-nonce",
+        consumed_at=61001.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    seed = registry.export_decision_attestation_consumption_audit_evidence(start_sequence=1, end_sequence=1)
+    expect(seed["success"] is True, f"Seed export failed: {seed}")
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        seed["evidence"], private_key, registry,
+        key_id="terminal-consumption-binding-key", issuer=issuer,
+        nonce="terminal-evidence-nonce", attestation_id="terminal-evidence-id",
+        issued_at=60900.0, expires_at=61200.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation failed: {evidence_attestation}")
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"], expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-evidence-nonce",
+        expected_attestation_id="terminal-evidence-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence consumption failed: {consumed_evidence}")
+    evidence_binding = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"], expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-evidence-nonce",
+        expected_attestation_id="terminal-evidence-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(evidence_binding["success"] is True, f"Evidence binding export failed: {evidence_binding}")
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [evidence_binding["proof"]], bundle_id="terminal-bundle-001", created_at=61030.0
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+    signed_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"], private_key, registry,
+        key_id="terminal-consumption-binding-key", issuer=issuer,
+        nonce="terminal-bundle-nonce", attestation_id="terminal-bundle-id",
+        issued_at=60990.0, expires_at=61200.0,
+        expected_verification_time=61020.0, clock_skew_seconds=0,
+    )["bundle"]
+    consumed_bundle = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle, expected_bundle_id="terminal-bundle-001", expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-bundle-nonce",
+        expected_attestation_id="terminal-bundle-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_bundle["success"] is True, f"Bundle consumption failed: {consumed_bundle}")
+    terminal_binding = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle, expected_bundle_id="terminal-bundle-001", expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-bundle-nonce",
+        expected_attestation_id="terminal-bundle-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(terminal_binding["success"] is True, f"Terminal binding export failed: {terminal_binding}")
+    consumed_terminal_binding = source.consume_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        terminal_binding["proof"], expected_bundle_id="terminal-bundle-001", expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-bundle-nonce",
+        expected_attestation_id="terminal-bundle-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(consumed_terminal_binding["success"] is True, f"Terminal binding proof consumption failed: {consumed_terminal_binding}")
+    terminal_proof = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(
+        terminal_binding["proof"], expected_bundle_id="terminal-bundle-001", expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-bundle-nonce",
+        expected_attestation_id="terminal-bundle-id", verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(terminal_proof["success"] is True, f"Terminal proof export failed: {terminal_proof}")
+
+    before = Path(state_path).read_bytes()
+    attested = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_with_trusted_key_replay_binding(
+        terminal_proof["proof"], private_key, registry,
+        key_id="terminal-consumption-binding-key", issuer=issuer,
+        nonce="terminal-attestation-nonce", attestation_id="terminal-attestation-id",
+        issued_at=60995.0, expires_at=61250.0,
+        expected_bundle_id="terminal-bundle-001", expected_source_issuer=issuer,
+        expected_source_key_id="terminal-consumption-binding-key", expected_source_nonce="terminal-bundle-nonce",
+        expected_source_attestation_id="terminal-bundle-id", expected_verification_time=61020.0,
+        clock_skew_seconds=0,
+    )
+    expect(attested["success"] is True, f"Terminal trusted-key attestation failed: {attested}")
+    expect(Path(state_path).read_bytes() == before, "Terminal attestation mutated persistent trust state.")
+
+    wrapper = attested["attestation"]
+    key_fp = private_key.public_key()
+    public_key_fingerprint = signed_bundle["bundle_attestation"]["key_fingerprint"]
+    offline = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_offline(
+        wrapper, {public_key_fingerprint: key_fp}, expected_bundle_id="terminal-bundle-001",
+        expected_issuer=issuer, expected_key_id="terminal-consumption-binding-key",
+        expected_nonce="terminal-attestation-nonce", expected_attestation_id="terminal-attestation-id",
+        expected_source_key_id="terminal-consumption-binding-key", expected_source_nonce="terminal-bundle-nonce",
+        expected_source_attestation_id="terminal-bundle-id", expected_verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(offline["success"] is True, f"Offline terminal attestation verification failed: {offline}")
+    expect(offline["offline"] is True and offline["read_only"] is True and offline["authoritative_state_mutated"] is False, "Offline terminal attestation mutation semantics were incorrect.")
+
+    current = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_with_registry(
+        wrapper, registry, expected_bundle_id="terminal-bundle-001", expected_issuer=issuer,
+        expected_key_id="terminal-consumption-binding-key", expected_nonce="terminal-attestation-nonce",
+        expected_attestation_id="terminal-attestation-id", expected_source_key_id="terminal-consumption-binding-key",
+        expected_source_nonce="terminal-bundle-nonce", expected_source_attestation_id="terminal-bundle-id",
+        expected_verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(current["success"] is True and current["current_registry_binding"] is True, f"Current terminal attestation verification failed: {current}")
+
+    tampered = json.loads(json.dumps(wrapper))
+    tampered["terminal_proof_attestation"]["signature_fingerprint"] = "0" * 64
+    tampered_result = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_offline(
+        tampered, {public_key_fingerprint: key_fp}, expected_bundle_id="terminal-bundle-001",
+        expected_issuer=issuer, expected_key_id="terminal-consumption-binding-key",
+        expected_nonce="terminal-attestation-nonce", expected_attestation_id="terminal-attestation-id",
+        expected_source_key_id="terminal-consumption-binding-key", expected_source_nonce="terminal-bundle-nonce",
+        expected_source_attestation_id="terminal-bundle-id", expected_verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(not tampered_result["success"] and tampered_result["reason"] == "signature_fingerprint_mismatch", f"Tampered terminal attestation was accepted: {tampered_result}")
+
+    expired = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_with_trusted_key_replay_binding(
+        terminal_proof["proof"], private_key, registry,
+        key_id="terminal-consumption-binding-key", issuer=issuer,
+        nonce="terminal-expired-nonce", attestation_id="terminal-expired-id",
+        issued_at=60900.0, expires_at=61010.0, expected_bundle_id="terminal-bundle-001",
+        expected_source_issuer=issuer, expected_source_key_id="terminal-consumption-binding-key",
+        expected_source_nonce="terminal-bundle-nonce", expected_source_attestation_id="terminal-bundle-id",
+        expected_verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(expired["success"] is True, f"Expired fixture attestation creation failed: {expired}")
+    expired_verify = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_attestation_offline(
+        expired["attestation"], {public_key_fingerprint: key_fp}, expected_bundle_id="terminal-bundle-001",
+        expected_issuer=issuer, expected_key_id="terminal-consumption-binding-key",
+        expected_nonce="terminal-expired-nonce", expected_attestation_id="terminal-expired-id",
+        expected_source_key_id="terminal-consumption-binding-key", expected_source_nonce="terminal-bundle-nonce",
+        expected_source_attestation_id="terminal-bundle-id", expected_verification_time=61020.0, clock_skew_seconds=0,
+    )
+    expect(not expired_verify["success"] and expired_verify["reason"] == "attestation_expired", f"Expired terminal attestation was accepted: {expired_verify}")
+
+    print("PASS: terminal consumption-binding proof can be trusted-key attested with replay binding")
+    print("PASS: terminal attestation verifies offline and against current registry provenance")
+    print("PASS: terminal attestation remains read-only and fails closed on tampering/expiration")
+
+def test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(tmp_dir):
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    issuer = "https://issuer.test/decision-consumption-proof-bundle-binding"
+    state_path = os.path.join(tmp_dir, "memory_oidc_decision_consumption_proof_bundle_binding_state.json")
+    registry = TrustedAttestationKeyRegistry()
+    source = OIDCDiscoveryJWKSSource(
+        issuer,
+        registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 58000.0,
+    )
+
+    private_key = Ed25519PrivateKey.generate()
+    registry.refresh_from_jwks(
+        {
+            "keys": [
+                public_key_to_jwk(
+                    private_key.public_key(),
+                    "proof-bundle-binding-key",
+                    version="2026-09-25",
+                    status=IDENTITY_KEY_STATUS_ACTIVE,
+                )
+            ]
+        },
+        source=issuer + "/.well-known/jwks.json",
+    )
+    registry._append_decision_attestation_consumption_audit(
+        event_type="CONSUMED",
+        attestation_id="proof-bundle-binding-seed",
+        decision_fingerprint="proof-bundle-binding-seed-fp",
+        nonce="proof-bundle-binding-seed-nonce",
+        consumed_at=58001.0,
+        reason="fixture",
+    )
+    source._persist_state()
+
+    exported = registry.export_decision_attestation_consumption_audit_evidence(
+        start_sequence=1,
+        end_sequence=1,
+    )
+    expect(exported["success"] is True, f"Binding evidence export failed: {exported}")
+
+    evidence_attestation = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_audit_evidence_with_trusted_key_replay_binding(
+        exported["evidence"],
+        private_key,
+        registry,
+        key_id="proof-bundle-binding-key",
+        issuer=issuer,
+        nonce="bundle-binding-evidence-nonce",
+        attestation_id="bundle-binding-evidence-id",
+        issued_at=57900.0,
+        expires_at=58200.0,
+    )
+    expect(evidence_attestation["success"] is True, f"Evidence attestation creation failed: {evidence_attestation}")
+
+    consumed_evidence = source.consume_decision_attestation_consumption_audit_evidence_attestation(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-evidence-nonce",
+        expected_attestation_id="bundle-binding-evidence-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(consumed_evidence["success"] is True, f"Evidence prerequisite consumption failed: {consumed_evidence}")
+
+    proof_export = source.export_decision_attestation_consumption_binding_proof(
+        evidence_attestation["evidence"],
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-evidence-nonce",
+        expected_attestation_id="bundle-binding-evidence-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(proof_export["success"] is True, f"Evidence binding proof export failed: {proof_export}")
+
+    composed = OIDCDiscoveryJWKSSource.compose_decision_attestation_consumption_proof_bundle(
+        [proof_export["proof"]],
+        bundle_id="bundle-binding-test-001",
+        created_at=58060.0,
+    )
+    expect(composed["success"] is True, f"Bundle composition failed: {composed}")
+
+    attested_bundle = OIDCDiscoveryJWKSSource.attest_decision_attestation_consumption_proof_bundle_with_trusted_key_replay_binding(
+        composed["bundle"],
+        private_key,
+        registry,
+        key_id="proof-bundle-binding-key",
+        issuer=issuer,
+        nonce="bundle-binding-nonce",
+        attestation_id="bundle-binding-attestation-id",
+        issued_at=57990.0,
+        expires_at=58200.0,
+        expected_verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(attested_bundle["success"] is True, f"Bundle attestation creation failed: {attested_bundle}")
+    signed_bundle = attested_bundle["bundle"]
+
+    consumed_bundle = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(consumed_bundle["success"] is True, f"Bundle attestation consumption failed: {consumed_bundle}")
+
+    before_export = Path(state_path).read_bytes()
+    exported_binding = source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(exported_binding["success"] is True, f"Bundle-attestation consumption binding export failed: {exported_binding}")
+    expect(exported_binding["read_only"] is True and exported_binding["authoritative_state_mutated"] is False, "Binding proof export was not read-only.")
+    expect(Path(state_path).read_bytes() == before_export, "Binding proof export mutated persistent trust state.")
+
+    proof = exported_binding["proof"]
+    key_fingerprint = signed_bundle["bundle_attestation"]["key_fingerprint"]
+    offline = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        proof,
+        {key_fingerprint: private_key.public_key()},
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(offline["success"] is True, f"Offline consumption binding verification failed: {offline}")
+    expect(offline["offline"] is True and offline["read_only"] is True and offline["authoritative_state_mutated"] is False, "Offline binding verification mutation semantics were incorrect.")
+    expect(offline["bundle_fingerprint"] == signed_bundle["bundle_fingerprint"], "Offline binding proof lost the bundle fingerprint.")
+    expect(offline["consumption_audit_record_hash"] == proof["binding"]["consumption_audit_record_hash"], "Offline binding proof lost the audit record hash.")
+
+    proof_fingerprint_before_replay = proof["proof_fingerprint"]
+    binding_fingerprint_before_replay = proof["binding"]["binding_fingerprint"]
+
+    replay = source.consume_decision_attestation_consumption_proof_bundle_attestation(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not replay["success"] and replay["status"] == "CONSUMPTION_PROOF_BUNDLE_ATTESTATION_REPLAYED", f"Bundle replay was not rejected: {replay}")
+
+    restarted_registry = TrustedAttestationKeyRegistry()
+    restarted_source = OIDCDiscoveryJWKSSource(
+        issuer,
+        restarted_registry,
+        state_path=state_path,
+        fetch_json=lambda *args: (_ for _ in ()).throw(RuntimeError("network must not be used")),
+        now_fn=lambda: 58060.0,
+    )
+    before_reexport = Path(state_path).read_bytes()
+    reexported = restarted_source.export_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        signed_bundle,
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(reexported["success"] is True, f"Binding proof re-export after restart failed: {reexported}")
+    expect(reexported["proof"]["proof_fingerprint"] != proof_fingerprint_before_replay, "Replay did not create a distinct audit-evidence snapshot fingerprint.")
+    expect(reexported["proof"]["binding"]["binding_fingerprint"] == binding_fingerprint_before_replay, "Binding fingerprint changed after replay/restart.")
+
+    original_after_replay = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        proof,
+        {key_fingerprint: private_key.public_key()},
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(original_after_replay["success"] is True, f"Original historical binding proof was invalidated by replay: {original_after_replay}")
+
+    reexported_offline = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        reexported["proof"],
+        {key_fingerprint: private_key.public_key()},
+        expected_bundle_id="bundle-binding-test-001",
+        expected_issuer=issuer,
+        expected_key_id="proof-bundle-binding-key",
+        expected_nonce="bundle-binding-nonce",
+        expected_attestation_id="bundle-binding-attestation-id",
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(reexported_offline["success"] is True, f"Re-exported binding proof failed offline verification: {reexported_offline}")
+    expect(Path(state_path).read_bytes() == before_reexport, "Binding proof re-export after restart mutated persistent trust state.")
+
+    tampered_bundle = json.loads(json.dumps(proof))
+    tampered_bundle["attested_bundle"]["bundle_attestation"]["nonce"] = "tampered-binding-nonce"
+    tampered_bundle_result = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        tampered_bundle,
+        {key_fingerprint: private_key.public_key()},
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not tampered_bundle_result["success"] and tampered_bundle_result["reason"] in {"proof_fingerprint_mismatch", "bundle_attestation_invalid"}, f"Tampered bundle-attestation binding proof was accepted: {tampered_bundle_result}")
+
+    tampered_audit = json.loads(json.dumps(proof))
+    tampered_audit["consumption_audit_evidence"]["records"][-1]["decision_fingerprint"] = "tampered-bundle-fingerprint"
+    tampered_audit_result = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        tampered_audit,
+        {key_fingerprint: private_key.public_key()},
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not tampered_audit_result["success"] and tampered_audit_result["reason"] == "proof_fingerprint_mismatch", f"Tampered audit evidence was accepted: {tampered_audit_result}")
+
+    tampered_binding = json.loads(json.dumps(proof))
+    tampered_binding["binding"]["bundle_fingerprint"] = "0" * 64
+    tampered_binding_result = OIDCDiscoveryJWKSSource.verify_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(
+        tampered_binding,
+        {key_fingerprint: private_key.public_key()},
+        verification_time=58050.0,
+        clock_skew_seconds=0,
+    )
+    expect(not tampered_binding_result["success"] and tampered_binding_result["reason"] == "proof_fingerprint_mismatch", f"Tampered binding section was accepted: {tampered_binding_result}")
+
+    print("PASS: bundle-attestation consumption binding proof exports read-only without new storage")
+    print("PASS: bundle-attestation consumption binding proof verifies fully offline")
+    print("PASS: historical binding remains verifiable across replay and persistent trust-state restart")
+    print("PASS: tampered bundle, audit evidence, and binding metadata fail closed")
+
+
 def test_decision_attestation_consumption_audit_evidence_attestation_concurrent_one_time_consumption(tmp_dir):
     import multiprocessing
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -7361,6 +8769,24 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_decision_attestation_consumption_proof_bundle_attestation_replay_and_temporal_binding(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_decision_attestation_consumption_proof_bundle_attestation_one_time_consumption(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_one_time_consumption(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_terminal_consumption_binding_proof_trusted_key_attestation(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_decision_attestation_consumption_proof_bundle_attestation_consumption_binding_proof_consumption_binding_one_time_consumption(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_decision_attestation_consumption_audit_evidence_attestation_concurrent_one_time_consumption(tmp_dir)
