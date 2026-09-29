@@ -910,6 +910,9 @@ def _check_entity_invariants(active_entities, archived_entities, violations):
         )
 
     for entity in active_entities + archived_entities:
+        if not isinstance(entity, dict):
+            continue
+
         entity_id = str(entity.get("entity_id", "") or "").strip()
         lifecycle_status = str(entity.get("lifecycle_status", "ACTIVE") or "ACTIVE").upper()
         archive_state = str(entity.get("archive_state", "ACTIVE") or "ACTIVE").upper()
