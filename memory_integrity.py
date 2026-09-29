@@ -592,11 +592,15 @@ def _entity_maps(active_entities, archived_entities):
     archived_by_id = {}
 
     for entity in active_entities:
+        if not isinstance(entity, dict):
+            continue
         entity_id = str(entity.get("entity_id", "") or "").strip()
         if entity_id:
             active_by_id[entity_id] = entity
 
     for entity in archived_entities:
+        if not isinstance(entity, dict):
+            continue
         entity_id = str(entity.get("entity_id", "") or "").strip()
         if entity_id:
             archived_by_id[entity_id] = entity
@@ -824,6 +828,14 @@ def _check_entity_invariants(active_entities, archived_entities, violations):
     seen_archive = set()
 
     for entity in active_entities:
+        if not isinstance(entity, dict):
+            _append_violation(
+                violations,
+                "ENTITY_INVALID_RECORD",
+                "Active Entity contains a non-dictionary record.",
+            )
+            continue
+
         entity_id = str(entity.get("entity_id", "") or "").strip()
         if not entity_id:
             _append_violation(
@@ -853,6 +865,14 @@ def _check_entity_invariants(active_entities, archived_entities, violations):
             )
 
     for entity in archived_entities:
+        if not isinstance(entity, dict):
+            _append_violation(
+                violations,
+                "ENTITY_ARCHIVE_INVALID_RECORD",
+                "Entity archive contains a non-dictionary record.",
+            )
+            continue
+
         entity_id = str(entity.get("entity_id", "") or "").strip()
         if not entity_id:
             _append_violation(
@@ -962,6 +982,14 @@ def _check_conflict_invariants(conflicts, active_by_id, archived_by_id, violatio
     seen_ids = set()
 
     for record in conflicts:
+        if not isinstance(record, dict):
+            _append_violation(
+                violations,
+                "CONFLICT_INVALID_RECORD",
+                "Conflict store contains a non-dictionary record.",
+            )
+            continue
+
         conflict_id = str(record.get("conflict_id", "") or "").strip()
         if not conflict_id:
             _append_violation(
@@ -1015,6 +1043,14 @@ def _check_recovery_invariants(recoveries, active_by_id, archived_by_id, violati
     seen_ids = set()
 
     for record in recoveries:
+        if not isinstance(record, dict):
+            _append_violation(
+                violations,
+                "RECOVERY_INVALID_RECORD",
+                "Recovery store contains a non-dictionary record.",
+            )
+            continue
+
         recovery_id = str(record.get("recovery_id", "") or "").strip()
         if not recovery_id:
             _append_violation(
@@ -1068,6 +1104,14 @@ def _check_relation_invariants(relations, active_by_id, archived_by_id, memory_i
     all_entity_ids = set(active_by_id) | set(archived_by_id)
 
     for relation in relations:
+        if not isinstance(relation, dict):
+            _append_violation(
+                violations,
+                "RELATION_INVALID_RECORD",
+                "Relation store contains a non-dictionary record.",
+            )
+            continue
+
         relation_id = str(relation.get("relation_id", "") or "").strip()
         if not relation_id:
             _append_violation(
@@ -1129,6 +1173,8 @@ def _check_relation_invariants(relations, active_by_id, archived_by_id, memory_i
 
 def _check_memory_entity_links(active_entities, archived_entities, memory_ids, violations):
     for entity in active_entities + archived_entities:
+        if not isinstance(entity, dict):
+            continue
         entity_id = str(entity.get("entity_id", "") or "").strip()
         linked_ids = entity.get("memory_ids", [])
         if not isinstance(linked_ids, list):
