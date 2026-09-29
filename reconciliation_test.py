@@ -539,6 +539,189 @@ def test_repair_plan_explainability(tmp_dir):
     expect(real["status"] == "REPAIRED", f"Real repair failed after explainability test: {real}")
     expect(real["repair_plan"]["change_count"] > 0, "Real repair did not retain the repair plan.")
 
+
+def test_memory_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {
+                "entities": [{
+                    "entity_id": "ent_1",
+                    "name": "Abaqus",
+                    "type": "SOFTWARE",
+                    "archive_state": "ACTIVE",
+                    "lifecycle_status": "ACTIVE",
+                    "version": 1,
+                    "history": [],
+                    "memory_ids": ["mem_1"],
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_relations.json"), {"relations": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                ],
+                "edges": [{
+                    "source": "mem_1",
+                    "target": "ent_1",
+                    "type": "MEMORY_HAS_ENTITY",
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    cases = [
+        ("MEMORY_INVALID_RECORD", ["invalid-memory"], []),
+        ("MEMORY_MISSING_ID", [{"memory": "Missing id"}], []),
+        (
+            "MEMORY_DUPLICATE_ID_ACTIVE",
+            [
+                {"memory_id": "mem_a", "memory": "A"},
+                {"memory_id": "mem_a", "memory": "B"},
+            ],
+            [],
+        ),
+        (
+            "ACTIVE_MEMORY_MARKED_ARCHIVED",
+            [{"memory_id": "mem_a", "memory": "Archived flag", "status": "archived"}],
+            [],
+        ),
+        (
+            "MEMORY_INVALID_ARCHIVE_RECORD",
+            [{"memory_id": "mem_active", "memory": "Active"}],
+            ["invalid-archive-memory"],
+        ),
+        (
+            "MEMORY_ARCHIVE_MISSING_ID",
+            [{"memory_id": "mem_active", "memory": "Active"}],
+            [{"memory": "Missing archive id"}],
+        ),
+        (
+            "MEMORY_DUPLICATE_ID_ARCHIVE",
+            [{"memory_id": "mem_active", "memory": "Active"}],
+            [
+                {"memory_id": "mem_arch", "memory": "A", "status": "archived"},
+                {"memory_id": "mem_arch", "memory": "B", "status": "archived"},
+            ],
+        ),
+        (
+            "MEMORY_ARCHIVE_STATUS_INVALID",
+            [{"memory_id": "mem_active", "memory": "Active"}],
+            [{"memory_id": "mem_arch", "memory": "Archived but active"}],
+        ),
+        (
+            "MEMORY_ACTIVE_ARCHIVE_OVERLAP",
+            [{"memory_id": "mem_overlap", "memory": "Active"}],
+            [{"memory_id": "mem_overlap", "memory": "Archived", "status": "archived"}],
+        ),
+        (
+            "MEMORY_SUPERSEDES_REFERENCE_MISSING",
+            [{"memory_id": "mem_a", "memory": "A", "supersedes": "missing_memory"}],
+            [],
+        ),
+        (
+            "MEMORY_SUPERSEDED_BY_REFERENCE_MISSING",
+            [{"memory_id": "mem_a", "memory": "A", "superseded_by": "missing_memory"}],
+            [],
+        ),
+        (
+            "MEMORY_CAUSAL_REFERENCE_MISSING",
+            [{
+                "memory_id": "mem_a",
+                "memory": "A",
+                "causal_links": [{
+                    "target_memory_id": "missing_memory",
+                    "relation": "CAUSES",
+                }],
+            }],
+            [],
+        ),
+    ]
+
+    repairable_codes = {"MEMORY_ARCHIVE_STATUS_INVALID"}
+
+    for expected_code, active_memory, archived_memory in cases:
+        write_healthy_fixture()
+        write_json(os.path.join(tmp_dir, "memory.json"), active_memory)
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), archived_memory)
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(report["valid"] is False, f"{expected_code} fixture unexpectedly validated as healthy: {report}")
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+        if expected_code in repairable_codes:
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_archive.json"),
+        [{
+            "memory_id": "mem_arch",
+            "memory": "Needs archive status repair",
+            "status": "active",
+        }],
+    )
+    repair_result = reconcile(tmp_dir)
+    expect(
+        repair_result["status"] == "REPAIRED",
+        f"MEMORY_ARCHIVE_STATUS_INVALID repair did not execute as expected: {repair_result}",
+    )
+    expect(
+        repair_result["after"]["valid"] is True,
+        f"Memory archive status repair left invalid state: {repair_result}",
+    )
+    with open(os.path.join(tmp_dir, "memory_archive.json"), "r", encoding="utf-8") as file:
+        repaired_archive = json.load(file)
+    expect(
+        repaired_archive[0]["status"] == "archived",
+        "Memory archive status was not canonicalized to archived.",
+    )
+
+
+
 def test_malformed_cross_layer_records_fail_closed(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -8718,6 +8901,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_graph_invariant_matrix_and_repair(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_memory_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_malformed_cross_layer_records_fail_closed(tmp_dir)
