@@ -722,6 +722,282 @@ def test_memory_invariant_matrix_and_policy(tmp_dir):
 
 
 
+
+def test_entity_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {
+                "entities": [{
+                    "entity_id": "ent_1",
+                    "name": "Abaqus",
+                    "type": "SOFTWARE",
+                    "archive_state": "ACTIVE",
+                    "lifecycle_status": "ACTIVE",
+                    "temporal_status": "current",
+                    "version": 2,
+                    "history": [{"snapshot": {"version": 1, "name": "Abaqus"}}],
+                    "memory_ids": ["mem_1"],
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_relations.json"), {"relations": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                ],
+                "edges": [{
+                    "source": "mem_1",
+                    "target": "ent_1",
+                    "type": "MEMORY_HAS_ENTITY",
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    cases = [
+        ("ENTITY_INVALID_RECORD", ["invalid-entity"], []),
+        ("ENTITY_MISSING_ID", [{"name": "Missing id", "type": "SOFTWARE"}], []),
+        (
+            "ENTITY_DUPLICATE_ID_ACTIVE",
+            [
+                {"entity_id": "ent_a", "name": "A", "type": "SOFTWARE"},
+                {"entity_id": "ent_a", "name": "B", "type": "SOFTWARE"},
+            ],
+            [],
+        ),
+        (
+            "ACTIVE_ENTITY_MARKED_ARCHIVED",
+            [{
+                "entity_id": "ent_archived",
+                "name": "Archived in active store",
+                "type": "SOFTWARE",
+                "archive_state": "ARCHIVED",
+                "lifecycle_status": "DORMANT",
+            }],
+            [],
+        ),
+        (
+            "ENTITY_ARCHIVE_INVALID_RECORD",
+            [],
+            ["invalid-entity-archive"],
+        ),
+        (
+            "ARCHIVE_MISSING_ID",
+            [],
+            [{
+                "name": "Archived without id",
+                "type": "SOFTWARE",
+                "archive_state": "ARCHIVED",
+                "lifecycle_status": "DORMANT",
+            }],
+        ),
+        (
+            "ENTITY_DUPLICATE_ID_ARCHIVE",
+            [],
+            [
+                {
+                    "entity_id": "ent_arch",
+                    "name": "A",
+                    "type": "SOFTWARE",
+                    "archive_state": "ARCHIVED",
+                    "lifecycle_status": "DORMANT",
+                },
+                {
+                    "entity_id": "ent_arch",
+                    "name": "B",
+                    "type": "SOFTWARE",
+                    "archive_state": "ARCHIVED",
+                    "lifecycle_status": "DORMANT",
+                },
+            ],
+        ),
+        (
+            "ARCHIVE_ENTITY_NOT_ARCHIVED",
+            [],
+            [{
+                "entity_id": "ent_not_archived",
+                "name": "Wrong archive state",
+                "type": "SOFTWARE",
+                "archive_state": "ACTIVE",
+                "lifecycle_status": "DORMANT",
+            }],
+        ),
+        (
+            "ENTITY_ACTIVE_ARCHIVE_OVERLAP",
+            [{
+                "entity_id": "ent_overlap",
+                "name": "Active copy",
+                "type": "SOFTWARE",
+                "archive_state": "ACTIVE",
+                "lifecycle_status": "ACTIVE",
+            }],
+            [{
+                "entity_id": "ent_overlap",
+                "name": "Archived copy",
+                "type": "SOFTWARE",
+                "archive_state": "ARCHIVED",
+                "lifecycle_status": "DORMANT",
+            }],
+        ),
+        (
+            "ENTITY_HISTORY_NOT_LIST",
+            [{
+                "entity_id": "ent_history",
+                "name": "Bad history container",
+                "type": "SOFTWARE",
+                "history": {},
+            }],
+            [],
+        ),
+        (
+            "ENTITY_HISTORY_INVALID_ENTRY",
+            [{
+                "entity_id": "ent_history",
+                "name": "Bad history entry",
+                "type": "SOFTWARE",
+                "version": 2,
+                "history": ["invalid-history-entry"],
+            }],
+            [],
+        ),
+        (
+            "ENTITY_HISTORY_INVALID_SNAPSHOT",
+            [{
+                "entity_id": "ent_history",
+                "name": "Bad snapshot",
+                "type": "SOFTWARE",
+                "version": 2,
+                "history": [{"snapshot": "invalid-snapshot"}],
+            }],
+            [],
+        ),
+        (
+            "ENTITY_HISTORY_INVALID_VERSION",
+            [{
+                "entity_id": "ent_history",
+                "name": "Bad version",
+                "type": "SOFTWARE",
+                "version": 2,
+                "history": [{"snapshot": {"version": "not-an-integer"}}],
+            }],
+            [],
+        ),
+        (
+            "ENTITY_HISTORY_CURRENT_VERSION_COLLISION",
+            [{
+                "entity_id": "ent_history",
+                "name": "Version collision",
+                "type": "SOFTWARE",
+                "version": 2,
+                "history": [{"snapshot": {"version": 2}}],
+            }],
+            [],
+        ),
+    ]
+
+    repairable_codes = {"ARCHIVE_ENTITY_NOT_ARCHIVED"}
+
+    for expected_code, active_entities, archived_entities in cases:
+        write_healthy_fixture()
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": active_entities},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entities_archive.json"),
+            {"entities": archived_entities},
+        )
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+        if expected_code in repairable_codes:
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_entities_archive.json"),
+        {
+            "entities": [{
+                "entity_id": "ent_repair",
+                "name": "Repairable Entity",
+                "type": "SOFTWARE",
+                "archive_state": "ACTIVE",
+                "lifecycle_status": "DORMANT",
+                "temporal_status": "current",
+                "version": 1,
+                "history": [],
+                "memory_ids": [],
+            }],
+        },
+    )
+
+    repair_result = reconcile(tmp_dir)
+    expect(
+        repair_result["status"] == "REPAIRED",
+        f"ARCHIVE_ENTITY_NOT_ARCHIVED repair did not execute as expected: {repair_result}",
+    )
+    expect(
+        repair_result["after"]["valid"] is True,
+        f"Entity archive-state repair left invalid state: {repair_result}",
+    )
+
+    with open(os.path.join(tmp_dir, "memory_entities_archive.json"), "r", encoding="utf-8") as file:
+        repaired_archive = json.load(file)
+    expect(
+        repaired_archive["entities"][0]["archive_state"] == "ARCHIVED",
+        "Entity archive state was not canonicalized to ARCHIVED.",
+    )
+
+
+
 def test_malformed_cross_layer_records_fail_closed(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -8904,6 +9180,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_memory_invariant_matrix_and_policy(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_entity_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_malformed_cross_layer_records_fail_closed(tmp_dir)
