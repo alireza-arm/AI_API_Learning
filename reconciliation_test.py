@@ -539,6 +539,40 @@ def test_repair_plan_explainability(tmp_dir):
     expect(real["status"] == "REPAIRED", f"Real repair failed after explainability test: {real}")
     expect(real["repair_plan"]["change_count"] > 0, "Real repair did not retain the repair plan.")
 
+def test_malformed_cross_layer_records_fail_closed(tmp_dir):
+    build_fixture(tmp_dir)
+
+    write_json(
+        os.path.join(tmp_dir, "memory_entities.json"),
+        {"entities": ["invalid-entity"]},
+    )
+    write_json(
+        os.path.join(tmp_dir, "memory_entities_archive.json"),
+        {"entities": [{"entity_id": "entity_archive_1", "archive_state": "ARCHIVED"}]},
+    )
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_conflicts.json"),
+        {"conflicts": ["invalid-conflict"]},
+    )
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_recovery.json"),
+        {"recoveries": ["invalid-recovery"]},
+    )
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_relations.json"),
+        {"relations": ["invalid-relation"]},
+    )
+
+    result = validate_invariants(tmp_dir)
+    codes = {item.get("code") for item in result["violations"]}
+
+    expect("ENTITY_INVALID_RECORD" in codes, f"Missing entity fail-closed violation: {result}")
+    expect("CONFLICT_INVALID_RECORD" in codes, f"Missing conflict fail-closed violation: {result}")
+    expect("RECOVERY_INVALID_RECORD" in codes, f"Missing recovery fail-closed violation: {result}")
+    expect("RELATION_INVALID_RECORD" in codes, f"Missing relation fail-closed violation: {result}")
+    expect(result["valid"] is False, f"Malformed stores must be invalid: {result}")
+
+
 def test_graph_invariant_matrix_and_repair(tmp_dir):
     cases = [
         (
@@ -8684,6 +8718,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_graph_invariant_matrix_and_repair(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_malformed_cross_layer_records_fail_closed(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_non_repairable_state_is_blocked(tmp_dir)
