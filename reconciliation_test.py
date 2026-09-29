@@ -539,6 +539,150 @@ def test_repair_plan_explainability(tmp_dir):
     expect(real["status"] == "REPAIRED", f"Real repair failed after explainability test: {real}")
     expect(real["repair_plan"]["change_count"] > 0, "Real repair did not retain the repair plan.")
 
+def test_graph_invariant_matrix_and_repair(tmp_dir):
+    cases = [
+        (
+            "GRAPH_INVALID_STORE",
+            [],
+        ),
+        (
+            "GRAPH_INVALID_COLLECTIONS",
+            {"nodes": {}, "edges": []},
+        ),
+        (
+            "GRAPH_INVALID_NODE",
+            {"nodes": ["invalid-node"], "edges": []},
+        ),
+        (
+            "GRAPH_NODE_MISSING_ID",
+            {"nodes": [{"kind": "memory"}], "edges": []},
+        ),
+        (
+            "GRAPH_DUPLICATE_NODE_ID",
+            {
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "mem_1", "kind": "memory"},
+                ],
+                "edges": [],
+            },
+        ),
+        (
+            "GRAPH_MEMORY_NODE_MISSING_SOURCE",
+            {
+                "nodes": [
+                    {"id": "ghost_memory", "kind": "memory"},
+                ],
+                "edges": [],
+            },
+        ),
+        (
+            "GRAPH_ENTITY_NODE_MISSING_SOURCE",
+            {
+                "nodes": [
+                    {"id": "ghost_entity", "kind": "entity"},
+                ],
+                "edges": [],
+            },
+        ),
+        (
+            "GRAPH_INVALID_EDGE",
+            {
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                ],
+                "edges": ["invalid-edge"],
+            },
+        ),
+        (
+            "GRAPH_EDGE_NODE_MISSING",
+            {
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                ],
+                "edges": [
+                    {
+                        "source": "mem_1",
+                        "target": "missing_node",
+                        "type": "RELATED_TO",
+                    }
+                ],
+            },
+        ),
+        (
+            "GRAPH_MEMORY_ENTITY_MEMORY_MISSING",
+            {
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                    {"id": "missing_memory", "kind": "other"},
+                ],
+                "edges": [
+                    {
+                        "source": "missing_memory",
+                        "target": "ent_1",
+                        "type": "MEMORY_HAS_ENTITY",
+                    }
+                ],
+            },
+        ),
+        (
+            "GRAPH_MEMORY_ENTITY_ENTITY_MISSING",
+            {
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "missing_entity", "kind": "other"},
+                ],
+                "edges": [
+                    {
+                        "source": "mem_1",
+                        "target": "missing_entity",
+                        "type": "MEMORY_HAS_ENTITY",
+                    }
+                ],
+            },
+        ),
+        (
+            "GRAPH_ENTITY_RELATION_ENTITY_MISSING",
+            {
+                "nodes": [
+                    {"id": "ghost_a", "kind": "other"},
+                    {"id": "ghost_b", "kind": "other"},
+                ],
+                "edges": [
+                    {
+                        "source": "ghost_a",
+                        "target": "ghost_b",
+                        "type": "ENTITY_RELATION",
+                    }
+                ],
+            },
+        ),
+    ]
+
+    for expected_code, graph in cases:
+        build_fixture(tmp_dir)
+        write_json(os.path.join(tmp_dir, "memory_graph.json"), graph)
+
+        before = validate_invariants(tmp_dir)
+        before_codes = {item.get("code") for item in before["violations"]}
+        expect(
+            expected_code in before_codes,
+            f"{expected_code} was not detected by validate_invariants: {before}",
+        )
+
+        result = reconcile(tmp_dir)
+        expect(
+            result["status"] in {"REPAIRED", "PARTIALLY_REPAIRED"},
+            f"{expected_code} did not enter the repair path: {result}",
+        )
+        expect(
+            result["after"]["valid"] is True,
+            f"{expected_code} was not repaired to a valid state: {result}",
+        )
+
+
 def test_non_repairable_state_is_blocked(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -8537,6 +8681,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_repair_and_reaudit(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_graph_invariant_matrix_and_repair(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_non_repairable_state_is_blocked(tmp_dir)
