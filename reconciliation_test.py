@@ -8554,6 +8554,9 @@ def main():
         test_dry_run_on_healthy_state_is_noop(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_repair_plan_explainability(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_policy_version_and_approval_trace(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
@@ -8663,6 +8666,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_oidc_jwt_compatible_attestation(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_oidc_jwt_adapter_integrates_with_reconciliation(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_oidc_discovery_and_automatic_jwks_refresh(tmp_dir)
