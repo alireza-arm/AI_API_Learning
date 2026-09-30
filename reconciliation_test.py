@@ -30,6 +30,10 @@ from memory_reconciliation import (
     REPAIR_POLICY_APPROVAL_REQUIREMENTS,
     REPAIR_POLICY_AUTO,
     REPAIR_POLICY_BLOCKED,
+    REPAIR_POLICY_DRY_RUN_ONLY,
+    REPAIR_POLICY_APPROVAL_REQUIRED,
+    REPAIR_POLICY_AUTO_CODES,
+    REPAIR_POLICY_DRY_RUN_ONLY_CODES,
     evaluate_repair_policy,
     get_reconciliation_history,
     inspect_reconciliation,
@@ -511,9 +515,21 @@ def test_repair_plan_explainability(tmp_dir):
     entity_changes = by_file["memory_entities.json"]["changes"]
     expect(
         any(
-            item.get("path") == "$.entities[0].memory_ids"
-            and item.get("before") == ["mem_1", "mem_1", "", "missing_memory"]
-            and item.get("after") == ["mem_1"]
+            item.get("path") == "$.entities[0].memory_ids[1]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == "mem_1"
+            for item in entity_changes
+        )
+        and any(
+            item.get("path") == "$.entities[0].memory_ids[2]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == ""
+            for item in entity_changes
+        )
+        and any(
+            item.get("path") == "$.entities[0].memory_ids[3]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == "missing_memory"
             for item in entity_changes
         ),
         "Repair plan did not explain Entity memory_ids canonicalization.",
@@ -522,9 +538,21 @@ def test_repair_plan_explainability(tmp_dir):
     relation_changes = by_file["memory_entity_relations.json"]["changes"]
     expect(
         any(
-            item.get("path") == "$.relations[0].memory_ids"
-            and item.get("before") == ["mem_1", "mem_1", "missing_memory", ""]
-            and item.get("after") == ["mem_1"]
+            item.get("path") == "$.relations[0].memory_ids[1]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == "mem_1"
+            for item in relation_changes
+        )
+        and any(
+            item.get("path") == "$.relations[0].memory_ids[2]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == "missing_memory"
+            for item in relation_changes
+        )
+        and any(
+            item.get("path") == "$.relations[0].memory_ids[3]"
+            and item.get("change_type") == "removed"
+            and item.get("before") == ""
             for item in relation_changes
         ),
         "Repair plan did not explain Relation memory_ids canonicalization.",
@@ -628,7 +656,7 @@ def test_memory_invariant_matrix_and_policy(tmp_dir):
         (
             "MEMORY_ARCHIVE_STATUS_INVALID",
             [{"memory_id": "mem_active", "memory": "Active"}],
-            [{"memory_id": "mem_arch", "memory": "Archived but active"}],
+            [{"memory_id": "mem_arch", "memory": "Archived but active", "status": "active"}],
         ),
         (
             "MEMORY_ACTIVE_ARCHIVE_OVERLAP",
@@ -1136,6 +1164,935 @@ def test_entity_lifecycle_temporal_invariant_matrix(tmp_dir):
             f"{expected_code} was incorrectly classified as repairable: {inspection}",
         )
 
+
+
+def test_conflict_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {
+                "entities": [{
+                    "entity_id": "ent_1",
+                    "name": "Abaqus",
+                    "type": "SOFTWARE",
+                    "archive_state": "ACTIVE",
+                    "lifecycle_status": "ACTIVE",
+                    "temporal_status": "current",
+                    "version": 2,
+                    "history": [{"snapshot": {"version": 1}}],
+                    "memory_ids": ["mem_1"],
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_relations.json"), {"relations": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                ],
+                "edges": [{
+                    "source": "mem_1",
+                    "target": "ent_1",
+                    "type": "MEMORY_HAS_ENTITY",
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def conflict_record(**overrides):
+        record = {
+            "conflict_id": "conf_1",
+            "entity_id": "ent_1",
+            "created_entity_id": "ent_1",
+            "decision": "SAME",
+        }
+        record.update(overrides)
+        return record
+
+    cases = [
+        (
+            "CONFLICT_INVALID_RECORD",
+            ["invalid-conflict"],
+        ),
+        (
+            "CONFLICT_MISSING_ID",
+            [conflict_record(conflict_id="")],
+        ),
+        (
+            "CONFLICT_DUPLICATE_ID",
+            [conflict_record(), conflict_record()],
+        ),
+        (
+            "CONFLICT_MERGE_BLOCK_VIOLATED",
+            [conflict_record(decision="POSSIBLE_CONFLICT")],
+        ),
+        (
+            "CONFLICT_SAME_ID_MISMATCH",
+            [conflict_record(created_entity_id="ent_other")],
+        ),
+        (
+            "CONFLICT_ENTITY_REFERENCE_MISSING",
+            [conflict_record(entity_id="ent_ghost")],
+        ),
+    ]
+
+    for expected_code, conflicts in cases:
+        write_healthy_fixture()
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": conflicts})
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+        expect(
+            expected_code in inspection["blocked_codes"],
+            f"{expected_code} was not fail-closed as blocked: {inspection}",
+        )
+        expect(
+            expected_code not in inspection["repairable_codes"],
+            f"{expected_code} was incorrectly classified as repairable: {inspection}",
+        )
+
+
+def test_recovery_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {
+                "entities": [{
+                    "entity_id": "ent_1",
+                    "name": "Abaqus",
+                    "type": "SOFTWARE",
+                    "archive_state": "ACTIVE",
+                    "lifecycle_status": "ACTIVE",
+                    "temporal_status": "current",
+                    "version": 2,
+                    "history": [{"snapshot": {"version": 1}}],
+                    "memory_ids": ["mem_1"],
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_relations.json"), {"relations": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                ],
+                "edges": [{
+                    "source": "mem_1",
+                    "target": "ent_1",
+                    "type": "MEMORY_HAS_ENTITY",
+                }],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def recovery_record(**overrides):
+        record = {
+            "recovery_id": "rec_1",
+            "entity_id": "ent_1",
+            "status": "STARTED",
+            "decision": "SAME",
+        }
+        record.update(overrides)
+        return record
+
+    # Healthy baseline: a RECOVERED record whose entity is active and absent
+    # from the archive must not raise any recovery-layer violation.
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_recovery.json"),
+        {"recoveries": [recovery_record(status="RECOVERED")]},
+    )
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy RECOVERED fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "RECOVERY_INVALID_RECORD",
+            ["invalid-recovery"],
+        ),
+        (
+            "RECOVERY_MISSING_ID",
+            [recovery_record(recovery_id="")],
+        ),
+        (
+            "RECOVERY_DUPLICATE_ID",
+            [recovery_record(), recovery_record()],
+        ),
+        (
+            "RECOVERY_DECISION_MISMATCH",
+            [recovery_record(status="RECOVERED", decision="DIFFERENT")],
+        ),
+        (
+            "RECOVERED_ENTITY_STILL_ARCHIVED",
+            [recovery_record(status="RECOVERED")],
+        ),
+        (
+            "RECOVERED_ENTITY_NOT_ACTIVE",
+            [recovery_record(status="RECOVERED", entity_id="ent_ghost")],
+        ),
+    ]
+
+    for expected_code, recoveries in cases:
+        write_healthy_fixture()
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_recovery.json"),
+            {"recoveries": recoveries},
+        )
+        if expected_code == "RECOVERED_ENTITY_STILL_ARCHIVED":
+            # The recovered Entity must exist in the archive store to trigger
+            # the still-archived violation while keeping every other layer
+            # healthy: move ent_1 out of the active store into the archive.
+            write_json(os.path.join(tmp_dir, "memory_entities.json"), {"entities": []})
+            write_json(
+                os.path.join(tmp_dir, "memory_entities_archive.json"),
+                {"entities": [{
+                    "entity_id": "ent_1",
+                    "name": "Abaqus",
+                    "type": "SOFTWARE",
+                    "archive_state": "ARCHIVED",
+                    "lifecycle_status": "ENDED",
+                    "temporal_status": "historical",
+                    "version": 2,
+                    "history": [{"snapshot": {"version": 1}}],
+                    "memory_ids": ["mem_1"],
+                }]},
+            )
+            write_json(
+                os.path.join(tmp_dir, "memory_graph.json"),
+                {
+                    "schema_version": 1,
+                    "nodes": [
+                        {"id": "mem_1", "kind": "memory"},
+                        {"id": "ent_1", "kind": "entity"},
+                    ],
+                    "edges": [{
+                        "source": "mem_1",
+                        "target": "ent_1",
+                        "type": "MEMORY_HAS_ENTITY",
+                    }],
+                },
+            )
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+        expect(
+            expected_code in inspection["blocked_codes"],
+            f"{expected_code} was not fail-closed as blocked: {inspection}",
+        )
+        expect(
+            expected_code not in inspection["repairable_codes"],
+            f"{expected_code} was incorrectly classified as repairable: {inspection}",
+        )
+
+
+def test_relation_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+
+        entity = {
+            "entity_id": "ent_1",
+            "name": "Abaqus",
+            "type": "SOFTWARE",
+            "archive_state": "ACTIVE",
+            "lifecycle_status": "ACTIVE",
+            "temporal_status": "current",
+            "version": 2,
+            "history": [{"snapshot": {"version": 1}}],
+            "memory_ids": ["mem_1"],
+        }
+        other_entity = dict(entity)
+        other_entity["entity_id"] = "ent_2"
+        other_entity["name"] = "Python"
+        other_entity["version"] = 1
+        other_entity["history"] = []
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": [entity, other_entity]},
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                    {"id": "ent_2", "kind": "entity"},
+                ],
+                "edges": [
+                    {"source": "mem_1", "target": "ent_1", "type": "MEMORY_HAS_ENTITY"},
+                    {"source": "mem_1", "target": "ent_2", "type": "MEMORY_HAS_ENTITY"},
+                ],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def relation_record(**overrides):
+        record = {
+            "relation_id": "rel_1",
+            "source_entity_id": "ent_1",
+            "target_entity_id": "ent_2",
+            "relation": "RELATED_TO",
+            "directed": True,
+            "memory_ids": ["mem_1"],
+        }
+        record.update(overrides)
+        return record
+
+    # Healthy baseline: a valid relation must not raise any relation-layer
+    # violation, proving the matrix is not trivially satisfied.
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_relations.json"),
+        {"relations": [relation_record()]},
+    )
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy relation fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "RELATION_INVALID_RECORD",
+            ["invalid-relation"],
+        ),
+        (
+            "RELATION_MISSING_ID",
+            [relation_record(relation_id="")],
+        ),
+        (
+            "RELATION_DUPLICATE_ID",
+            [relation_record(), relation_record()],
+        ),
+        (
+            "RELATION_MISSING_ENDPOINT",
+            [relation_record(target_entity_id="")],
+        ),
+        (
+            "RELATION_SELF_REFERENCE",
+            [relation_record(target_entity_id="ent_1")],
+        ),
+        (
+            "RELATION_ENTITY_REFERENCE_MISSING",
+            [relation_record(target_entity_id="ent_ghost")],
+        ),
+        (
+            "RELATION_MEMORY_REFERENCE_MISSING",
+            [relation_record(memory_ids=["ghost_memory"])],
+        ),
+    ]
+
+    for expected_code, relations in cases:
+        write_healthy_fixture()
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": relations},
+        )
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        if expected_code == "RELATION_MEMORY_REFERENCE_MISSING":
+            # This link violation has a canonical deterministic repair that
+            # prunes stale Memory IDs from Relations using authoritative
+            # stores; assert it is classified as repairable/AUTO.
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+
+def test_operation_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(os.path.join(tmp_dir, "memory.json"), [])
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entities_archive.json"),
+            {"entities": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_conflicts.json"),
+            {"conflicts": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_recovery.json"),
+            {"recoveries": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {"schema_version": 1, "nodes": [], "edges": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_operations.json"),
+            {"operations": []},
+        )
+
+    def operation_record(**overrides):
+        record = {
+            "operation_id": "op_1",
+            "operation_key": "key_1",
+            "operation_type": "MEMORY_ADD",
+            "status": "STARTED",
+            "attempt_count": 1,
+            "recovery_count": 0,
+        }
+        record.update(overrides)
+        return record
+
+    # Healthy baseline: a valid operation must not raise any operation-layer
+    # violation, proving the matrix is not trivially satisfied.
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_operations.json"),
+        {"operations": [operation_record()]},
+    )
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy operation fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "OPERATION_INVALID_STORE",
+            "not-a-dict",
+        ),
+        (
+            "OPERATION_INVALID_COLLECTION",
+            {"operations": "not-a-list"},
+        ),
+        (
+            "OPERATION_INVALID_RECORD",
+            {"operations": ["invalid-operation"]},
+        ),
+        (
+            "OPERATION_MISSING_ID",
+            {"operations": [operation_record(operation_id="")]},
+        ),
+        (
+            "OPERATION_DUPLICATE_ID",
+            {
+                "operations": [
+                    operation_record(),
+                    operation_record(operation_key="key_2"),
+                ]
+            },
+        ),
+        (
+            "OPERATION_MISSING_KEY",
+            {"operations": [operation_record(operation_key="")]},
+        ),
+        (
+            "OPERATION_DUPLICATE_KEY",
+            {
+                "operations": [
+                    operation_record(),
+                    operation_record(operation_id="op_2"),
+                ]
+            },
+        ),
+        (
+            "OPERATION_INVALID_STATUS",
+            {"operations": [operation_record(status="WEIRD")]},
+        ),
+        (
+            "OPERATION_INVALID_ATTEMPT_COUNT",
+            {"operations": [operation_record(attempt_count=0)]},
+        ),
+        (
+            "OPERATION_INVALID_RECOVERY_COUNT",
+            {"operations": [operation_record(recovery_count=-1)]},
+        ),
+        (
+            "COMPLETED_OPERATION_HAS_LEASE",
+            {
+                "operations": [
+                    operation_record(
+                        status="COMPLETED",
+                        lease_expires_at="2099-01-01T00:00:00+00:00",
+                    )
+                ]
+            },
+        ),
+    ]
+
+    repairable_operation_codes = {"COMPLETED_OPERATION_HAS_LEASE"}
+
+    for expected_code, store in cases:
+        write_healthy_fixture()
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), store)
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        if expected_code in repairable_operation_codes:
+            # Lease cleanup on completed operations has a canonical
+            # deterministic repair; assert it is classified as repairable.
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+
+
+def test_reconciliation_policy_matrix(tmp_dir):
+    """STAGE 9: Direct matrix over every repair-policy branch.
+
+    Covers AUTO, DRY_RUN_ONLY, APPROVAL_REQUIRED, BLOCKED, unknown-code
+    fail-closed behavior, and mixed-violation effective-policy precedence.
+    All mutations of policy sets are restored in ``finally`` blocks so this
+    test never leaks state into later tests.
+    """
+    code = "GRAPH_MEMORY_NODE_MISSING_SOURCE"
+    auto_code = "MEMORY_ARCHIVE_STATUS_INVALID"
+    original_auto = set(REPAIR_POLICY_AUTO_CODES)
+    original_dry_run = set(REPAIR_POLICY_DRY_RUN_ONLY_CODES)
+    original_approval = set(REPAIR_POLICY_APPROVAL_REQUIRED_CODES)
+
+    def synthetic(codes):
+        return {"repairable_codes": list(codes)}
+
+    try:
+        # --- AUTO branch -------------------------------------------------
+        REPAIR_POLICY_AUTO_CODES.clear()
+        REPAIR_POLICY_AUTO_CODES.update(original_auto)
+        policy = evaluate_repair_policy(synthetic([auto_code]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_AUTO,
+            f"Known AUTO code did not resolve to AUTO: {policy}",
+        )
+        expect(
+            policy["policy_safe_to_auto_repair"] is True,
+            f"AUTO policy must be marked safe for auto repair: {policy}",
+        )
+        expect(
+            policy["decisions"] == [{"code": auto_code, "policy": REPAIR_POLICY_AUTO}],
+            f"AUTO decision missing or malformed: {policy}",
+        )
+
+        # --- DRY_RUN_ONLY branch ---------------------------------------
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.add(code)
+        try:
+            policy = evaluate_repair_policy(synthetic([code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_DRY_RUN_ONLY,
+                f"DRY_RUN_ONLY code did not resolve to DRY_RUN_ONLY: {policy}",
+            )
+            expect(
+                policy["requires_dry_run"] is True,
+                f"DRY_RUN_ONLY code must require dry-run: {policy}",
+            )
+            expect(
+                policy["policy_safe_to_auto_repair"] is False,
+                f"DRY_RUN_ONLY code must not be auto-repair safe: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(code)
+
+        # --- APPROVAL_REQUIRED branch ----------------------------------
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.add(code)
+        try:
+            policy = evaluate_repair_policy(synthetic([code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_APPROVAL_REQUIRED,
+                f"APPROVAL_REQUIRED code did not resolve to approval: {policy}",
+            )
+            expect(
+                policy["requires_approval"] is True,
+                f"APPROVAL_REQUIRED code must require approval: {policy}",
+            )
+            expect(
+                policy["approval_requirement"],
+                f"APPROVAL_REQUIRED code must expose an approval requirement: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_APPROVAL_REQUIRED_CODES.discard(code)
+
+        # --- BLOCKED branch (repairable but no explicit policy) --------
+        REPAIR_POLICY_AUTO_CODES.discard(auto_code)
+        try:
+            policy = evaluate_repair_policy(synthetic([auto_code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+                f"Repairable code without explicit policy must fail closed: {policy}",
+            )
+            expect(
+                policy["blocked_policy_codes"] == [auto_code],
+                f"Unmapped repairable code was not isolated as blocked: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_AUTO_CODES.clear()
+            REPAIR_POLICY_AUTO_CODES.update(original_auto)
+
+        # --- Unknown violation fail-closed -----------------------------
+        policy = evaluate_repair_policy(synthetic(["UNKNOWN_FUTURE_CODE"]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+            f"Unknown policy code did not fail closed: {policy}",
+        )
+        expect(
+            policy["blocked_policy_codes"] == ["UNKNOWN_FUTURE_CODE"],
+            f"Unknown policy code was not isolated as blocked: {policy}",
+        )
+
+        # --- Empty inspection fails closed ------------------------------
+        policy = evaluate_repair_policy(synthetic([]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+            f"Empty repairable set must fail closed instead of defaulting open: {policy}",
+        )
+
+        # --- Mixed violations: precedence ordering ----------------------
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.add(code)
+        try:
+            # AUTO + DRY_RUN_ONLY -> DRY_RUN_ONLY dominates.
+            policy = evaluate_repair_policy(synthetic([auto_code, code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_DRY_RUN_ONLY,
+                f"DRY_RUN_ONLY must dominate AUTO in mixed violations: {policy}",
+            )
+            # AUTO + DRY_RUN_ONLY + unknown/blocked -> BLOCKED dominates all.
+            policy = evaluate_repair_policy(
+                synthetic([auto_code, code, "UNKNOWN_FUTURE_CODE"])
+            )
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+                f"BLOCKED must dominate every other policy in mixed violations: {policy}",
+            )
+            # Per-code decisions remain independent of the effective policy.
+            decisions = {item["code"]: item["policy"] for item in policy["decisions"]}
+            expect(
+                decisions[auto_code] == REPAIR_POLICY_AUTO
+                and decisions[code] == REPAIR_POLICY_DRY_RUN_ONLY
+                and decisions["UNKNOWN_FUTURE_CODE"] == REPAIR_POLICY_BLOCKED,
+                f"Mixed per-code decisions were not mapped independently: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(code)
+
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.add(code)
+        try:
+            # APPROVAL_REQUIRED + DRY_RUN_ONLY -> approval dominates dry-run.
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.add("RELATION_MEMORY_REFERENCE_MISSING")
+            try:
+                policy = evaluate_repair_policy(
+                    synthetic([code, "RELATION_MEMORY_REFERENCE_MISSING", auto_code])
+                )
+                expect(
+                    policy["effective_policy"] == REPAIR_POLICY_APPROVAL_REQUIRED,
+                    f"APPROVAL_REQUIRED must dominate DRY_RUN_ONLY/AUTO: {policy}",
+                )
+            finally:
+                REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(
+                    "RELATION_MEMORY_REFERENCE_MISSING"
+                )
+        finally:
+            REPAIR_POLICY_APPROVAL_REQUIRED_CODES.discard(code)
+
+        # --- Policy snapshot stability ----------------------------------
+        first = evaluate_repair_policy(inspect_reconciliation(tmp_dir))
+        second = evaluate_repair_policy(inspect_reconciliation(tmp_dir))
+        expect(
+            first["policy_fingerprint"] == second["policy_fingerprint"],
+            f"Policy fingerprint is not deterministic across inspections: {first} vs {second}",
+        )
+        expect(
+            first["policy_version"] == second["policy_version"],
+            f"Policy version is not stable across inspections: {first} vs {second}",
+        )
+    finally:
+        REPAIR_POLICY_AUTO_CODES.clear()
+        REPAIR_POLICY_AUTO_CODES.update(original_auto)
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.clear()
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.update(original_dry_run)
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.clear()
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.update(original_approval)
+
+
+def test_memory_entity_link_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+
+        entity = {
+            "entity_id": "ent_1",
+            "name": "Abaqus",
+            "type": "SOFTWARE",
+            "archive_state": "ACTIVE",
+            "lifecycle_status": "ACTIVE",
+            "temporal_status": "current",
+            "version": 2,
+            "history": [{"snapshot": {"version": 1}}],
+            "memory_ids": ["mem_1"],
+        }
+        other_entity = dict(entity)
+        other_entity["entity_id"] = "ent_2"
+        other_entity["name"] = "Python"
+        other_entity["version"] = 1
+        other_entity["history"] = []
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": [entity, other_entity]},
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": [{
+                "relation_id": "rel_1",
+                "source_entity_id": "ent_1",
+                "target_entity_id": "ent_2",
+                "relation": "RELATED_TO",
+                "directed": True,
+                "memory_ids": ["mem_1"],
+            }]},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                    {"id": "ent_2", "kind": "entity"},
+                ],
+                "edges": [
+                    {"source": "mem_1", "target": "ent_1", "type": "MEMORY_HAS_ENTITY"},
+                    {"source": "mem_1", "target": "ent_2", "type": "MEMORY_HAS_ENTITY"},
+                ],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def mutate_entity(**overrides):
+        """Rewrite the active Entity store with ent_1 fields overridden."""
+        entities_path = os.path.join(tmp_dir, "memory_entities.json")
+        store = json.loads(open(entities_path, encoding="utf-8").read())
+        for entity in store["entities"]:
+            if entity["entity_id"] == "ent_1":
+                entity.update(overrides)
+        write_json(entities_path, store)
+
+    # Healthy baseline: canonical links must not raise any link violation.
+    write_healthy_fixture()
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy link fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "ENTITY_MEMORY_LINKS_NOT_LIST",
+            lambda: mutate_entity(memory_ids="mem_1"),
+        ),
+        (
+            "ENTITY_EMPTY_MEMORY_LINK",
+            lambda: mutate_entity(memory_ids=["mem_1", ""]),
+        ),
+        (
+            "ENTITY_DUPLICATE_MEMORY_LINK",
+            lambda: mutate_entity(memory_ids=["mem_1", "mem_1"]),
+        ),
+        (
+            "ENTITY_MEMORY_REFERENCE_MISSING",
+            lambda: mutate_entity(memory_ids=["mem_1", "ghost_memory"]),
+        ),
+        (
+            "RELATION_MEMORY_REFERENCE_MISSING",
+            lambda: write_json(
+                os.path.join(tmp_dir, "memory_entity_relations.json"),
+                {"relations": [{
+                    "relation_id": "rel_1",
+                    "source_entity_id": "ent_1",
+                    "target_entity_id": "ent_2",
+                    "relation": "RELATED_TO",
+                    "directed": True,
+                    "memory_ids": ["mem_1", "ghost_memory"],
+                }]},
+            ),
+        ),
+    ]
+
+    for expected_code, mutation in cases:
+        write_healthy_fixture()
+        mutation()
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        # All five link violations belong to LINK_REPAIR_CODES: they have a
+        # canonical deterministic repair (pruning against authoritative
+        # stores) and must therefore be repairable/AUTO, never blocked.
+        expect(
+            expected_code in inspection["repairable_codes"],
+            f"{expected_code} was not classified as repairable: {inspection}",
+        )
+        expect(
+            expected_code not in inspection["blocked_codes"],
+            f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+        )
 
 
 def test_malformed_cross_layer_records_fail_closed(tmp_dir):
@@ -9326,6 +10283,18 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_entity_lifecycle_temporal_invariant_matrix(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_conflict_invariant_matrix_and_policy(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_recovery_invariant_matrix_and_policy(tmp_dir)
+        test_relation_invariant_matrix_and_policy(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_operation_invariant_matrix_and_policy(tmp_dir)
+        test_reconciliation_policy_matrix(tmp_dir)
+        test_memory_entity_link_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_malformed_cross_layer_records_fail_closed(tmp_dir)
