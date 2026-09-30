@@ -1444,6 +1444,166 @@ def test_recovery_invariant_matrix_and_policy(tmp_dir):
         )
 
 
+def test_relation_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+
+        entity = {
+            "entity_id": "ent_1",
+            "name": "Abaqus",
+            "type": "SOFTWARE",
+            "archive_state": "ACTIVE",
+            "lifecycle_status": "ACTIVE",
+            "temporal_status": "current",
+            "version": 2,
+            "history": [{"snapshot": {"version": 1}}],
+            "memory_ids": ["mem_1"],
+        }
+        other_entity = dict(entity)
+        other_entity["entity_id"] = "ent_2"
+        other_entity["name"] = "Python"
+        other_entity["version"] = 1
+        other_entity["history"] = []
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": [entity, other_entity]},
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                    {"id": "ent_2", "kind": "entity"},
+                ],
+                "edges": [
+                    {"source": "mem_1", "target": "ent_1", "type": "MEMORY_HAS_ENTITY"},
+                    {"source": "mem_1", "target": "ent_2", "type": "MEMORY_HAS_ENTITY"},
+                ],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def relation_record(**overrides):
+        record = {
+            "relation_id": "rel_1",
+            "source_entity_id": "ent_1",
+            "target_entity_id": "ent_2",
+            "relation": "RELATED_TO",
+            "directed": True,
+            "memory_ids": ["mem_1"],
+        }
+        record.update(overrides)
+        return record
+
+    # Healthy baseline: a valid relation must not raise any relation-layer
+    # violation, proving the matrix is not trivially satisfied.
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_entity_relations.json"),
+        {"relations": [relation_record()]},
+    )
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy relation fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "RELATION_INVALID_RECORD",
+            ["invalid-relation"],
+        ),
+        (
+            "RELATION_MISSING_ID",
+            [relation_record(relation_id="")],
+        ),
+        (
+            "RELATION_DUPLICATE_ID",
+            [relation_record(), relation_record()],
+        ),
+        (
+            "RELATION_MISSING_ENDPOINT",
+            [relation_record(target_entity_id="")],
+        ),
+        (
+            "RELATION_SELF_REFERENCE",
+            [relation_record(target_entity_id="ent_1")],
+        ),
+        (
+            "RELATION_ENTITY_REFERENCE_MISSING",
+            [relation_record(target_entity_id="ent_ghost")],
+        ),
+        (
+            "RELATION_MEMORY_REFERENCE_MISSING",
+            [relation_record(memory_ids=["ghost_memory"])],
+        ),
+    ]
+
+    for expected_code, relations in cases:
+        write_healthy_fixture()
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": relations},
+        )
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        if expected_code == "RELATION_MEMORY_REFERENCE_MISSING":
+            # This link violation has a canonical deterministic repair that
+            # prunes stale Memory IDs from Relations using authoritative
+            # stores; assert it is classified as repairable/AUTO.
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+
 def test_malformed_cross_layer_records_fail_closed(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -9638,6 +9798,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_recovery_invariant_matrix_and_policy(tmp_dir)
+        test_relation_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_malformed_cross_layer_records_fail_closed(tmp_dir)
