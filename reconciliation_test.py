@@ -360,6 +360,136 @@ def test_repair_and_reaudit(tmp_dir):
     expect(second["executed"] is False, "Healthy second reconciliation must not execute another repair.")
 
 
+def _snapshot_stores(tmp_dir):
+    store_names = [
+        "memory.json",
+        "memory_archive.json",
+        "memory_entities.json",
+        "memory_entities_archive.json",
+        "memory_entity_conflicts.json",
+        "memory_entity_recovery.json",
+        "memory_entity_relations.json",
+        "memory_graph.json",
+    ]
+    snapshot = {}
+    for name in store_names:
+        path = os.path.join(tmp_dir, name)
+        if os.path.exists(path):
+            with open(path, "rb") as file:
+                snapshot[name] = hashlib.sha256(file.read()).hexdigest()
+        else:
+            snapshot[name] = None
+    return snapshot
+
+
+def test_post_repair_verification_matrix(tmp_dir):
+    """STAGE 14: after every repair, validation/audit/idempotency/reconstruction/consistency."""
+
+    # --- Dimension 1+4: validate_invariants + reconstruction from authoritative stores.
+    build_fixture(tmp_dir)
+    before_validation = validate_invariants(tmp_dir)
+    expect(not before_validation["valid"], "Post-repair matrix fixture must start invalid.")
+
+    first = reconcile(tmp_dir)
+    expect(first["status"] == "REPAIRED", f"Post-repair matrix initial repair failed: {first}")
+    expect(first["after"]["valid"] is True, "Repaired state must validate immediately after repair.")
+
+    # Reconstruction check: the repaired graph must be exactly derivable from
+    # authoritative stores (no blind patching survived).
+    with open(os.path.join(tmp_dir, "memory_graph.json"), "r", encoding="utf-8") as file:
+        rebuilt_graph = json.load(file)
+    node_ids = {item.get("id") for item in rebuilt_graph["nodes"]}
+    edge_keys = {
+        (item.get("source"), item.get("target"), item.get("type"))
+        for item in rebuilt_graph["edges"]
+    }
+    expect("ghost" not in node_ids, "Ghost node survived post-repair verification.")
+    expect(
+        ("mem_1", "ent_1", "MEMORY_HAS_ENTITY") in edge_keys,
+        "Authoritative Memory->Entity link was not reconstructed during repair.",
+    )
+    expect(
+        ("mem_old", "ent_old", "MEMORY_HAS_ENTITY") in edge_keys,
+        "Archive-side link was not reconstructed from authoritative stores.",
+    )
+
+    # State consistency: every graph memory/entity node must exist in a
+    # canonical store and vice versa.
+    with open(os.path.join(tmp_dir, "memory.json"), "r", encoding="utf-8") as file:
+        active_memories = json.load(file)
+    with open(os.path.join(tmp_dir, "memory_archive.json"), "r", encoding="utf-8") as file:
+        archived_memories = json.load(file)
+    canonical_memory_ids = {
+        item["memory_id"] for item in active_memories + archived_memories
+    }
+    graph_memory_node_ids = {
+        item["id"] for item in rebuilt_graph["nodes"] if item.get("kind") == "memory"
+    }
+    expect(
+        graph_memory_node_ids == canonical_memory_ids,
+        "Graph memory nodes diverged from canonical Memory stores after repair.",
+    )
+
+    # --- Dimension 2: audit persisted for the completed repair.
+    history = get_reconciliation_history(tmp_dir)
+    expect(len(history) == 1, f"Exactly one repair audit record expected: {history}")
+    audit_record = history[0]
+    expect(audit_record["status"] == "COMPLETED", "Repair audit record is not COMPLETED.")
+    expect(audit_record["reconciliation_status"] == "REPAIRED", "Audit reconciliation status mismatch.")
+    expect(audit_record["after"]["valid"] is True, "Audit must persist a valid after-snapshot.")
+    expect(audit_record["repair"]["changed"] is True, "Audit must persist repair details.")
+
+    # --- Dimension 3: idempotency — repeat repairs are no-ops on healthy state.
+    second = reconcile(tmp_dir)
+    expect(second["status"] == "HEALTHY", f"Repeat reconcile on healthy state should be HEALTHY: {second}")
+    expect(second["executed"] is False, "Healthy repeat reconcile must not execute a repair.")
+
+    # A fresh process-local call chain (simulating restart) sees the same result.
+    third = inspect_reconciliation(tmp_dir)
+    expect(third["valid"] is True, "Inspection after repair must report a valid state.")
+    expect(not third["violations"], f"No violations expected after verified repair: {third['violations']}")
+
+    # Store bytes must be stable across no-op reconciliations (byte-level idempotency).
+    snapshot_a = _snapshot_stores(tmp_dir)
+    reconcile(tmp_dir)
+    snapshot_b = _snapshot_stores(tmp_dir)
+    expect(snapshot_a == snapshot_b, "No-op reconciliation mutated canonical store bytes.")
+
+    history_after_noop = get_reconciliation_history(tmp_dir)
+    expect(
+        len(history_after_noop) == 1,
+        "No-op reconciliation must not append new repair audit records.",
+    )
+
+    # --- Dimensions 1-5 again after a SECOND corruption/repair cycle (re-entry).
+    write_json(
+        os.path.join(tmp_dir, "memory_graph.json"),
+        {"nodes": [{"id": "ghost_again", "kind": "memory"}], "edges": []},
+    )
+    reentry_before = validate_invariants(tmp_dir)
+    expect(not reentry_before["valid"], "Reintroduced graph corruption must fail validation.")
+
+    fourth = reconcile(tmp_dir)
+    expect(fourth["status"] == "REPAIRED", f"Second-cycle repair did not run: {fourth}")
+    expect(fourth["after"]["valid"] is True, "Second-cycle repair must leave a valid state.")
+
+    history_after_reentry = get_reconciliation_history(tmp_dir)
+    expect(
+        len(history_after_reentry) == 2,
+        f"Each completed repair cycle must create exactly one audit record: {len(history_after_reentry)}",
+    )
+    expect(
+        history_after_reentry[0]["operation_id"] != history_after_reentry[1]["operation_id"],
+        "Second repair cycle reused the first cycle's operation identity.",
+    )
+
+    fifth = reconcile(tmp_dir)
+    expect(fifth["status"] == "HEALTHY", "State must be healthy again after the second repair.")
+    expect(fifth["executed"] is False, "Healthy state after re-entry must not trigger another repair.")
+
+    print("PASS: post-repair validation, audit, idempotency, reconstruction, and consistency verified")
+
+
 def test_reconciliation_audit_history(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -10572,6 +10702,9 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_approval_requirement_changes_policy_fingerprint(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_post_repair_verification_matrix(tmp_dir)
 
     print("RECONCILIATION_TEST_PASS")
 
