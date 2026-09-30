@@ -1604,6 +1604,171 @@ def test_relation_invariant_matrix_and_policy(tmp_dir):
             )
 
 
+def test_operation_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(os.path.join(tmp_dir, "memory.json"), [])
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entities_archive.json"),
+            {"entities": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_conflicts.json"),
+            {"conflicts": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_recovery.json"),
+            {"recoveries": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {"schema_version": 1, "nodes": [], "edges": []},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_operations.json"),
+            {"operations": []},
+        )
+
+    def operation_record(**overrides):
+        record = {
+            "operation_id": "op_1",
+            "operation_key": "key_1",
+            "operation_type": "MEMORY_ADD",
+            "status": "STARTED",
+            "attempt_count": 1,
+            "recovery_count": 0,
+        }
+        record.update(overrides)
+        return record
+
+    # Healthy baseline: a valid operation must not raise any operation-layer
+    # violation, proving the matrix is not trivially satisfied.
+    write_healthy_fixture()
+    write_json(
+        os.path.join(tmp_dir, "memory_operations.json"),
+        {"operations": [operation_record()]},
+    )
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy operation fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "OPERATION_INVALID_STORE",
+            "not-a-dict",
+        ),
+        (
+            "OPERATION_INVALID_COLLECTION",
+            {"operations": "not-a-list"},
+        ),
+        (
+            "OPERATION_INVALID_RECORD",
+            {"operations": ["invalid-operation"]},
+        ),
+        (
+            "OPERATION_MISSING_ID",
+            {"operations": [operation_record(operation_id="")]},
+        ),
+        (
+            "OPERATION_DUPLICATE_ID",
+            {
+                "operations": [
+                    operation_record(),
+                    operation_record(operation_key="key_2"),
+                ]
+            },
+        ),
+        (
+            "OPERATION_MISSING_KEY",
+            {"operations": [operation_record(operation_key="")]},
+        ),
+        (
+            "OPERATION_DUPLICATE_KEY",
+            {
+                "operations": [
+                    operation_record(),
+                    operation_record(operation_id="op_2"),
+                ]
+            },
+        ),
+        (
+            "OPERATION_INVALID_STATUS",
+            {"operations": [operation_record(status="WEIRD")]},
+        ),
+        (
+            "OPERATION_INVALID_ATTEMPT_COUNT",
+            {"operations": [operation_record(attempt_count=0)]},
+        ),
+        (
+            "OPERATION_INVALID_RECOVERY_COUNT",
+            {"operations": [operation_record(recovery_count=-1)]},
+        ),
+        (
+            "COMPLETED_OPERATION_HAS_LEASE",
+            {
+                "operations": [
+                    operation_record(
+                        status="COMPLETED",
+                        lease_expires_at="2099-01-01T00:00:00+00:00",
+                    )
+                ]
+            },
+        ),
+    ]
+
+    repairable_operation_codes = {"COMPLETED_OPERATION_HAS_LEASE"}
+
+    for expected_code, store in cases:
+        write_healthy_fixture()
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), store)
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        if expected_code in repairable_operation_codes:
+            # Lease cleanup on completed operations has a canonical
+            # deterministic repair; assert it is classified as repairable.
+            expect(
+                expected_code in inspection["repairable_codes"],
+                f"{expected_code} was not classified as repairable: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["blocked_codes"],
+                f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+            )
+        else:
+            expect(
+                expected_code in inspection["blocked_codes"],
+                f"{expected_code} was not fail-closed as blocked: {inspection}",
+            )
+            expect(
+                expected_code not in inspection["repairable_codes"],
+                f"{expected_code} was incorrectly classified as repairable: {inspection}",
+            )
+
+
+
 def test_memory_entity_link_invariant_matrix_and_policy(tmp_dir):
     def write_healthy_fixture():
         write_json(
@@ -9949,6 +10114,7 @@ def main():
         test_relation_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_operation_invariant_matrix_and_policy(tmp_dir)
         test_memory_entity_link_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
