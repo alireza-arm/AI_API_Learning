@@ -14,9 +14,36 @@ still receives its own isolated temporary directory, matching the semantics of
 the main()-driven harness.
 """
 
+import os
 import tempfile
 
 import pytest
+
+
+REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+@pytest.fixture(autouse=True)
+def _stable_cwd():
+    """Some suites chdir into their own temp dir and later restore the
+    *original* cwd.  Under pytest the process cwd can be deleted mid-session
+    (other tests' TemporaryDirectories), which makes ``os.getcwd()`` raise
+    FileNotFoundError inside those suites.  Enter every test from this repo
+    root and leave it there again, so the suites' getcwd()/chdir-restore
+    steps always land on a real, stable directory.  Test-harness-only;
+    production code untouched.
+    """
+    prev = None
+    try:
+        prev = os.getcwd()
+    except FileNotFoundError:
+        pass
+    os.chdir(REPO_ROOT)
+    yield
+    if prev is not None and os.path.isdir(prev):
+        os.chdir(prev)
+    else:
+        os.chdir(REPO_ROOT)
 
 
 @pytest.fixture

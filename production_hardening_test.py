@@ -6,7 +6,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-BASE = Path('/mnt/data')
+# STAGE 15 fix: the project root is wherever this file lives.  The previous
+# hard-coded '/mnt/data' path only existed on one specific machine and made
+# the suite fail with FileNotFoundError everywhere else (including pytest
+# runs from any other cwd).  Same pattern as the other test files.
+BASE = Path(__file__).resolve().parent
 
 
 def write_stub_sentence_transformers(root: Path):
@@ -180,6 +184,25 @@ def main():
         os.chdir(original_cwd)
         sys.path[:] = old_path
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# STAGE 15: pytest-discoverable entry point.
+# The full behavior suite lives in main(); this thin wrapper lets pytest
+# discover and run it as a single test while keeping the direct
+# `python production_hardening_test.py` runner (Windows / no-pytest) unchanged.
+# ---------------------------------------------------------------------------
+def test_production_hardening():
+    # The suite is cwd-sensitive (it chdirs into its own temp dir and
+    # restores the original cwd afterwards).  Pin the process cwd to a
+    # stable directory so pytest can run it from any working directory.
+    import os
+    old_cwd = os.getcwd()
+    os.chdir(str(BASE))
+    try:
+        main()
+    finally:
+        os.chdir(old_cwd)
 
 
 if __name__ == '__main__':
