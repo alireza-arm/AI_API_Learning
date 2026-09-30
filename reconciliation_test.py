@@ -30,6 +30,10 @@ from memory_reconciliation import (
     REPAIR_POLICY_APPROVAL_REQUIREMENTS,
     REPAIR_POLICY_AUTO,
     REPAIR_POLICY_BLOCKED,
+    REPAIR_POLICY_DRY_RUN_ONLY,
+    REPAIR_POLICY_APPROVAL_REQUIRED,
+    REPAIR_POLICY_AUTO_CODES,
+    REPAIR_POLICY_DRY_RUN_ONLY_CODES,
     evaluate_repair_policy,
     get_reconciliation_history,
     inspect_reconciliation,
@@ -1767,6 +1771,180 @@ def test_operation_invariant_matrix_and_policy(tmp_dir):
                 f"{expected_code} was incorrectly classified as repairable: {inspection}",
             )
 
+
+
+def test_reconciliation_policy_matrix(tmp_dir):
+    """STAGE 9: Direct matrix over every repair-policy branch.
+
+    Covers AUTO, DRY_RUN_ONLY, APPROVAL_REQUIRED, BLOCKED, unknown-code
+    fail-closed behavior, and mixed-violation effective-policy precedence.
+    All mutations of policy sets are restored in ``finally`` blocks so this
+    test never leaks state into later tests.
+    """
+    code = "GRAPH_MEMORY_NODE_MISSING_SOURCE"
+    auto_code = "MEMORY_ARCHIVE_STATUS_INVALID"
+    original_auto = set(REPAIR_POLICY_AUTO_CODES)
+    original_dry_run = set(REPAIR_POLICY_DRY_RUN_ONLY_CODES)
+    original_approval = set(REPAIR_POLICY_APPROVAL_REQUIRED_CODES)
+
+    def synthetic(codes):
+        return {"repairable_codes": list(codes)}
+
+    try:
+        # --- AUTO branch -------------------------------------------------
+        REPAIR_POLICY_AUTO_CODES.clear()
+        REPAIR_POLICY_AUTO_CODES.update(original_auto)
+        policy = evaluate_repair_policy(synthetic([auto_code]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_AUTO,
+            f"Known AUTO code did not resolve to AUTO: {policy}",
+        )
+        expect(
+            policy["policy_safe_to_auto_repair"] is True,
+            f"AUTO policy must be marked safe for auto repair: {policy}",
+        )
+        expect(
+            policy["decisions"] == [{"code": auto_code, "policy": REPAIR_POLICY_AUTO}],
+            f"AUTO decision missing or malformed: {policy}",
+        )
+
+        # --- DRY_RUN_ONLY branch ---------------------------------------
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.add(code)
+        try:
+            policy = evaluate_repair_policy(synthetic([code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_DRY_RUN_ONLY,
+                f"DRY_RUN_ONLY code did not resolve to DRY_RUN_ONLY: {policy}",
+            )
+            expect(
+                policy["requires_dry_run"] is True,
+                f"DRY_RUN_ONLY code must require dry-run: {policy}",
+            )
+            expect(
+                policy["policy_safe_to_auto_repair"] is False,
+                f"DRY_RUN_ONLY code must not be auto-repair safe: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(code)
+
+        # --- APPROVAL_REQUIRED branch ----------------------------------
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.add(code)
+        try:
+            policy = evaluate_repair_policy(synthetic([code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_APPROVAL_REQUIRED,
+                f"APPROVAL_REQUIRED code did not resolve to approval: {policy}",
+            )
+            expect(
+                policy["requires_approval"] is True,
+                f"APPROVAL_REQUIRED code must require approval: {policy}",
+            )
+            expect(
+                policy["approval_requirement"],
+                f"APPROVAL_REQUIRED code must expose an approval requirement: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_APPROVAL_REQUIRED_CODES.discard(code)
+
+        # --- BLOCKED branch (repairable but no explicit policy) --------
+        REPAIR_POLICY_AUTO_CODES.discard(auto_code)
+        try:
+            policy = evaluate_repair_policy(synthetic([auto_code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+                f"Repairable code without explicit policy must fail closed: {policy}",
+            )
+            expect(
+                policy["blocked_policy_codes"] == [auto_code],
+                f"Unmapped repairable code was not isolated as blocked: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_AUTO_CODES.clear()
+            REPAIR_POLICY_AUTO_CODES.update(original_auto)
+
+        # --- Unknown violation fail-closed -----------------------------
+        policy = evaluate_repair_policy(synthetic(["UNKNOWN_FUTURE_CODE"]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+            f"Unknown policy code did not fail closed: {policy}",
+        )
+        expect(
+            policy["blocked_policy_codes"] == ["UNKNOWN_FUTURE_CODE"],
+            f"Unknown policy code was not isolated as blocked: {policy}",
+        )
+
+        # --- Empty inspection fails closed ------------------------------
+        policy = evaluate_repair_policy(synthetic([]))
+        expect(
+            policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+            f"Empty repairable set must fail closed instead of defaulting open: {policy}",
+        )
+
+        # --- Mixed violations: precedence ordering ----------------------
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.add(code)
+        try:
+            # AUTO + DRY_RUN_ONLY -> DRY_RUN_ONLY dominates.
+            policy = evaluate_repair_policy(synthetic([auto_code, code]))
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_DRY_RUN_ONLY,
+                f"DRY_RUN_ONLY must dominate AUTO in mixed violations: {policy}",
+            )
+            # AUTO + DRY_RUN_ONLY + unknown/blocked -> BLOCKED dominates all.
+            policy = evaluate_repair_policy(
+                synthetic([auto_code, code, "UNKNOWN_FUTURE_CODE"])
+            )
+            expect(
+                policy["effective_policy"] == REPAIR_POLICY_BLOCKED,
+                f"BLOCKED must dominate every other policy in mixed violations: {policy}",
+            )
+            # Per-code decisions remain independent of the effective policy.
+            decisions = {item["code"]: item["policy"] for item in policy["decisions"]}
+            expect(
+                decisions[auto_code] == REPAIR_POLICY_AUTO
+                and decisions[code] == REPAIR_POLICY_DRY_RUN_ONLY
+                and decisions["UNKNOWN_FUTURE_CODE"] == REPAIR_POLICY_BLOCKED,
+                f"Mixed per-code decisions were not mapped independently: {policy}",
+            )
+        finally:
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(code)
+
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.add(code)
+        try:
+            # APPROVAL_REQUIRED + DRY_RUN_ONLY -> approval dominates dry-run.
+            REPAIR_POLICY_DRY_RUN_ONLY_CODES.add("RELATION_MEMORY_REFERENCE_MISSING")
+            try:
+                policy = evaluate_repair_policy(
+                    synthetic([code, "RELATION_MEMORY_REFERENCE_MISSING", auto_code])
+                )
+                expect(
+                    policy["effective_policy"] == REPAIR_POLICY_APPROVAL_REQUIRED,
+                    f"APPROVAL_REQUIRED must dominate DRY_RUN_ONLY/AUTO: {policy}",
+                )
+            finally:
+                REPAIR_POLICY_DRY_RUN_ONLY_CODES.discard(
+                    "RELATION_MEMORY_REFERENCE_MISSING"
+                )
+        finally:
+            REPAIR_POLICY_APPROVAL_REQUIRED_CODES.discard(code)
+
+        # --- Policy snapshot stability ----------------------------------
+        first = evaluate_repair_policy(inspect_reconciliation(tmp_dir))
+        second = evaluate_repair_policy(inspect_reconciliation(tmp_dir))
+        expect(
+            first["policy_fingerprint"] == second["policy_fingerprint"],
+            f"Policy fingerprint is not deterministic across inspections: {first} vs {second}",
+        )
+        expect(
+            first["policy_version"] == second["policy_version"],
+            f"Policy version is not stable across inspections: {first} vs {second}",
+        )
+    finally:
+        REPAIR_POLICY_AUTO_CODES.clear()
+        REPAIR_POLICY_AUTO_CODES.update(original_auto)
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.clear()
+        REPAIR_POLICY_DRY_RUN_ONLY_CODES.update(original_dry_run)
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.clear()
+        REPAIR_POLICY_APPROVAL_REQUIRED_CODES.update(original_approval)
 
 
 def test_memory_entity_link_invariant_matrix_and_policy(tmp_dir):
@@ -10115,6 +10293,7 @@ def main():
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_operation_invariant_matrix_and_policy(tmp_dir)
+        test_reconciliation_policy_matrix(tmp_dir)
         test_memory_entity_link_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
