@@ -15,12 +15,40 @@ the main()-driven harness.
 """
 
 import os
+import shutil
 import tempfile
+import time
 
 import pytest
 
 
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def _on_rm_error(func, path, exc_info):
+    """Windows-safe cleanup handler for ``shutil.rmtree``.
+
+    On Windows a just-closed file handle can linger for a few milliseconds
+    (antivirus/indexer still holding it), so an immediate delete fails with
+    ``PermissionError: [WinError 32]``.  Retry briefly; if the entry is still
+    locked, ignore it rather than crashing the test session.  POSIX behavior
+    is unchanged (the first attempt always succeeds there).
+    """
+    if os.name != "nt":
+        return
+    for _ in range(10):
+        time.sleep(0.05)
+        try:
+            func(path)
+            return
+        except OSError:
+            continue
+    # Last resort: never let temp-dir cleanup fail the whole suite.
+    try:
+        os.chmod(path, 0o666)
+        func(path)
+    except OSError:
+        pass
 
 
 @pytest.fixture(autouse=True)
@@ -48,5 +76,35 @@ def _stable_cwd():
 
 @pytest.fixture
 def tmp_dir():
-    with tempfile.TemporaryDirectory(prefix="pytest_reconciliation_") as path:
+    path = tempfile.mkdtemp(prefix="pytest_reconciliation_")
+    try:
         yield path
+    finally:
+        shutil.rmtree(path, onerror=_on_rm_error)
+
+
+@pytest.fixture(autouse=True)
+def _windows_tempdir_cleanup(monkeypatch):
+    """Make ``tempfile.TemporaryDirectory`` cleanup Windows-safe.
+
+    On Windows a just-closed file handle can linger for milliseconds
+    (antivirus/Windows Defender/Search indexer), so the automatic
+    ``TemporaryDirectory.__exit__`` delete raises
+    ``PermissionError: [WinError 32]`` *after* all assertions passed.
+    This patches the cleanup call itself (test-harness only; production
+    code untouched) to retry briefly and never fail the session.
+    No-op on POSIX.
+    """
+    if os.name != "nt":
+        yield
+        return
+
+    real_rmtree = shutil.rmtree
+
+    def patched_rmtree(path, *args, **kwargs):
+        kwargs.pop("ignore_errors", None)
+        kwargs["onerror"] = _on_rm_error
+        return real_rmtree(path, *args, **kwargs)
+
+    monkeypatch.setattr(tempfile._shutil, "rmtree", patched_rmtree)
+    yield
