@@ -1604,6 +1604,154 @@ def test_relation_invariant_matrix_and_policy(tmp_dir):
             )
 
 
+def test_memory_entity_link_invariant_matrix_and_policy(tmp_dir):
+    def write_healthy_fixture():
+        write_json(
+            os.path.join(tmp_dir, "memory.json"),
+            [{
+                "memory_id": "mem_1",
+                "memory": "Abaqus",
+                "status": "active",
+                "importance": 3,
+                "confidence": 0.8,
+                "version": 1,
+                "memory_type": "fact",
+            }],
+        )
+        write_json(os.path.join(tmp_dir, "memory_archive.json"), [])
+
+        entity = {
+            "entity_id": "ent_1",
+            "name": "Abaqus",
+            "type": "SOFTWARE",
+            "archive_state": "ACTIVE",
+            "lifecycle_status": "ACTIVE",
+            "temporal_status": "current",
+            "version": 2,
+            "history": [{"snapshot": {"version": 1}}],
+            "memory_ids": ["mem_1"],
+        }
+        other_entity = dict(entity)
+        other_entity["entity_id"] = "ent_2"
+        other_entity["name"] = "Python"
+        other_entity["version"] = 1
+        other_entity["history"] = []
+        write_json(
+            os.path.join(tmp_dir, "memory_entities.json"),
+            {"entities": [entity, other_entity]},
+        )
+        write_json(os.path.join(tmp_dir, "memory_entities_archive.json"), {"entities": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_conflicts.json"), {"conflicts": []})
+        write_json(os.path.join(tmp_dir, "memory_entity_recovery.json"), {"recoveries": []})
+        write_json(
+            os.path.join(tmp_dir, "memory_entity_relations.json"),
+            {"relations": [{
+                "relation_id": "rel_1",
+                "source_entity_id": "ent_1",
+                "target_entity_id": "ent_2",
+                "relation": "RELATED_TO",
+                "directed": True,
+                "memory_ids": ["mem_1"],
+            }]},
+        )
+        write_json(
+            os.path.join(tmp_dir, "memory_graph.json"),
+            {
+                "schema_version": 1,
+                "nodes": [
+                    {"id": "mem_1", "kind": "memory"},
+                    {"id": "ent_1", "kind": "entity"},
+                    {"id": "ent_2", "kind": "entity"},
+                ],
+                "edges": [
+                    {"source": "mem_1", "target": "ent_1", "type": "MEMORY_HAS_ENTITY"},
+                    {"source": "mem_1", "target": "ent_2", "type": "MEMORY_HAS_ENTITY"},
+                ],
+            },
+        )
+        write_json(os.path.join(tmp_dir, "memory_operations.json"), {"operations": []})
+
+    def mutate_entity(**overrides):
+        """Rewrite the active Entity store with ent_1 fields overridden."""
+        entities_path = os.path.join(tmp_dir, "memory_entities.json")
+        store = json.loads(open(entities_path, encoding="utf-8").read())
+        for entity in store["entities"]:
+            if entity["entity_id"] == "ent_1":
+                entity.update(overrides)
+        write_json(entities_path, store)
+
+    # Healthy baseline: canonical links must not raise any link violation.
+    write_healthy_fixture()
+    baseline = validate_invariants(tmp_dir)
+    expect(
+        baseline["valid"] is True,
+        f"Healthy link fixture unexpectedly invalid: {baseline}",
+    )
+
+    cases = [
+        (
+            "ENTITY_MEMORY_LINKS_NOT_LIST",
+            lambda: mutate_entity(memory_ids="mem_1"),
+        ),
+        (
+            "ENTITY_EMPTY_MEMORY_LINK",
+            lambda: mutate_entity(memory_ids=["mem_1", ""]),
+        ),
+        (
+            "ENTITY_DUPLICATE_MEMORY_LINK",
+            lambda: mutate_entity(memory_ids=["mem_1", "mem_1"]),
+        ),
+        (
+            "ENTITY_MEMORY_REFERENCE_MISSING",
+            lambda: mutate_entity(memory_ids=["mem_1", "ghost_memory"]),
+        ),
+        (
+            "RELATION_MEMORY_REFERENCE_MISSING",
+            lambda: write_json(
+                os.path.join(tmp_dir, "memory_entity_relations.json"),
+                {"relations": [{
+                    "relation_id": "rel_1",
+                    "source_entity_id": "ent_1",
+                    "target_entity_id": "ent_2",
+                    "relation": "RELATED_TO",
+                    "directed": True,
+                    "memory_ids": ["mem_1", "ghost_memory"],
+                }]},
+            ),
+        ),
+    ]
+
+    for expected_code, mutation in cases:
+        write_healthy_fixture()
+        mutation()
+
+        report = validate_invariants(tmp_dir)
+        violation_codes = {item.get("code") for item in report["violations"]}
+
+        expect(
+            report["valid"] is False,
+            f"{expected_code} fixture unexpectedly validated as healthy: {report}",
+        )
+        expect(
+            expected_code in violation_codes,
+            f"{expected_code} was not detected directly by validate_invariants: {report}",
+        )
+
+        inspection = inspect_reconciliation(tmp_dir)
+
+        # All five link violations belong to LINK_REPAIR_CODES: they have a
+        # canonical deterministic repair (pruning against authoritative
+        # stores) and must therefore be repairable/AUTO, never blocked.
+        expect(
+            expected_code in inspection["repairable_codes"],
+            f"{expected_code} was not classified as repairable: {inspection}",
+        )
+        expect(
+            expected_code not in inspection["blocked_codes"],
+            f"{expected_code} was incorrectly fail-closed as blocked: {inspection}",
+        )
+
+
 def test_malformed_cross_layer_records_fail_closed(tmp_dir):
     build_fixture(tmp_dir)
 
@@ -9799,6 +9947,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_recovery_invariant_matrix_and_policy(tmp_dir)
         test_relation_invariant_matrix_and_policy(tmp_dir)
+
+    with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
+        test_memory_entity_link_invariant_matrix_and_policy(tmp_dir)
 
     with tempfile.TemporaryDirectory(prefix="reconciliation_test_") as tmp_dir:
         test_malformed_cross_layer_records_fail_closed(tmp_dir)
