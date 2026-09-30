@@ -196,47 +196,31 @@ def load_operation_store():
 
 @contextmanager
 def _operation_store_lock():
-    """Serialize operation-store claims/updates across processes."""
+    """Serialize operation-store claims/updates across processes.
+
+    STAGE 17 fix: the previous implementation was an O_EXCL lock *file*.
+    Its stale-lock recovery removed the lock file whenever its mtime was
+    older than OPERATION_LOCK_STALE_SECONDS, even while another live
+    process still held it.  A second process could then create a fresh
+    lock file and enter the critical section concurrently with the first
+    one (lost mutual exclusion -> duplicate operation claims).
+
+    The lock is now backed by an OS advisory byte-range lock on a
+    persistent lock file (fcntl.flock / msvcrt.locking via
+    memory_storage.interprocess_lock).  That kind of lock is owned by
+    the file handle: it is released automatically when the holder
+    crashes or exits, so there is no stale-file removal race at all.
+    The lock file itself is never deleted while in use.
+    """
+    from memory_storage import interprocess_lock
+
     lock_path = os.path.abspath(OPERATION_LOCK_FILE)
-    deadline = time.monotonic() + OPERATION_LOCK_TIMEOUT_SECONDS
-    fd = None
-
-    while True:
-        try:
-            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            os.write(fd, str(os.getpid()).encode("utf-8"))
-            os.close(fd)
-            fd = None
-            break
-        except FileExistsError:
-            try:
-                age = time.time() - os.path.getmtime(lock_path)
-                if age > OPERATION_LOCK_STALE_SECONDS:
-                    os.remove(lock_path)
-                    continue
-            except OSError:
-                pass
-
-            if time.monotonic() >= deadline:
-                raise TimeoutError("Could not acquire operation store lock.")
-            time.sleep(0.02)
-        except OSError:
-            if time.monotonic() >= deadline:
-                raise
-            time.sleep(0.02)
-
-    try:
+    with interprocess_lock(
+        lock_path,
+        timeout_seconds=OPERATION_LOCK_TIMEOUT_SECONDS,
+        poll_seconds=0.02,
+    ):
         yield
-    finally:
-        if fd is not None:
-            try:
-                os.close(fd)
-            except OSError:
-                pass
-        try:
-            os.remove(lock_path)
-        except OSError:
-            pass
 
 
 def _safe_result_data(result):
