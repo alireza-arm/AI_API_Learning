@@ -25,14 +25,71 @@ import pytest
 REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
+def _reset_tree_perms(root):
+    """Best-effort attribute/permission reset on a directory tree (Windows)."""
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in dirnames + filenames:
+            p = os.path.join(dirpath, name)
+            try:
+                os.chmod(p, 0o666)
+            except OSError:
+                pass
+    try:
+        os.chmod(root, 0o666)
+    except OSError:
+        pass
+
+
+def _force_rmtree(path):
+    """Delete *path* no matter how stubbornly Windows holds handles open.
+
+    WinError 32 on a *directory* means something (Defender / Search indexer /
+    a lingering open handle inside the tree) keeps an entry within it busy.
+    Deleting the individual entries first and retrying the empty directory
+    repeatedly usually succeeds; if it never does we give up quietly so temp
+    cleanup cannot fail the suite.
+    """
+    for _attempt in range(40):
+        if not os.path.exists(path):
+            return
+        _reset_tree_perms(path)
+        try:
+            with os.scandir(path) as it:
+                entries = list(it)
+        except OSError:
+            entries = []
+        # Best-effort bottom-up sweep of one level; never block on locked
+        # children — the outer loop retries until they release.
+        for entry in entries:
+            target = entry.path
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    _force_rmtree(target)
+                else:
+                    os.unlink(target)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                continue
+        try:
+            os.rmdir(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.05)
+    # Give up quietly: leftover temp dirs are harmless; failing tests is not.
+
+
 def _on_rm_error(func, path, exc_info):
     """Windows-safe cleanup handler for ``shutil.rmtree``.
 
     On Windows a just-closed file handle can linger for a few milliseconds
     (antivirus/indexer still holding it), so an immediate delete fails with
     ``PermissionError: [WinError 32]``.  Retry briefly; if the entry is still
-    locked, ignore it rather than crashing the test session.  POSIX behavior
-    is unchanged (the first attempt always succeeds there).
+    locked, force-delete the subtree bottom-up; as a last resort ignore the
+    error rather than crashing the test session.  POSIX behavior is unchanged
+    (the first attempt always succeeds there).
     """
     if os.name != "nt":
         return
@@ -43,6 +100,10 @@ def _on_rm_error(func, path, exc_info):
             return
         except OSError:
             continue
+    # Directory-handle contention (WinError 32): force-delete bottom-up.
+    if os.path.isdir(path):
+        _force_rmtree(path)
+        return
     # Last resort: never let temp-dir cleanup fail the whole suite.
     try:
         os.chmod(path, 0o666)
@@ -103,8 +164,13 @@ def _windows_tempdir_cleanup(monkeypatch):
 
     def patched_rmtree(path, *args, **kwargs):
         kwargs.pop("ignore_errors", None)
-        kwargs["onerror"] = _on_rm_error
-        return real_rmtree(path, *args, **kwargs)
+        kwargs.pop("onerror", None)
+        kwargs.pop("onexc", None)
+        try:
+            return real_rmtree(path, *args, onerror=_on_rm_error, **kwargs)
+        except OSError:
+            # Absolute last resort: temp-dir cleanup must never fail the suite.
+            _force_rmtree(path)
 
     monkeypatch.setattr(tempfile._shutil, "rmtree", patched_rmtree)
     yield
