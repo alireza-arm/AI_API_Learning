@@ -268,5 +268,24 @@ def main():
                 sys.path.remove(item)
 
 
+# ---------------------------------------------------------------------------
+# STAGE 15: pytest-discoverable entry point.
+# The full behavior suite lives in main(); this thin wrapper lets pytest
+# discover and run it as a single test while keeping the direct
+# `python idempotency_invariant_integration_test.py` runner (Windows / no-pytest) unchanged.
+# ---------------------------------------------------------------------------
+def test_idempotency_invariant_integration():
+    # The suite is cwd-sensitive (it chdirs into its own temp dir and
+    # restores the original cwd afterwards).  Pin the process cwd to a
+    # stable directory so pytest can run it from any working directory.
+    import os
+    old_cwd = os.getcwd()
+    os.chdir(str(BASE))
+    try:
+        main()
+    finally:
+        os.chdir(old_cwd)
+
+
 if __name__ == "__main__":
     main()

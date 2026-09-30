@@ -10711,3 +10711,12 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# STAGE 15: standardized pytest entry point.
+# Every test function in this module is discovered by pytest directly; the
+# tmp_dir fixture from conftest.py supplies the scratch directory.  The
+# main()-driven path above is kept unchanged for Windows runners that invoke
+# `python reconciliation_test.py` without pytest installed.
+# ---------------------------------------------------------------------------
