@@ -1,12 +1,15 @@
+import contextlib
 import json
 import math
+import os
+import tempfile
 import time
 
-from long_term_memory import get_memory
-from memory_entities import Memory
-
-
-EMBEDDING_FILE = "embeddings.json"
+from long_term_memory import (
+    EMBEDDINGS_FILE,
+    cosine_similarity as _engine_cosine,
+    get_memory,
+)
 
 
 # --------------------------------------------------
@@ -14,52 +17,94 @@ EMBEDDING_FILE = "embeddings.json"
 # --------------------------------------------------
 
 def load_embeddings():
+    """
+    Read-through to the engine's canonical embedding store.
+
+    STAGE 21 fix: previously this module read a separate file
+    ("embeddings.json") that nothing else in the project ever wrote,
+    so retrieve_memories() silently returned [] forever.  The engine
+    owns one embedding document (memory_embeddings.json); reading it
+    here keeps a single source of truth and stays backward compatible
+    for callers of load_embeddings().
+
+    The file is parsed directly (no sentence-transformers import), so
+    retrieval works even when the optional ML dependency is absent.
+    Malformed or non-object documents fail closed to {}.
+    """
+    try:
+        with open(EMBEDDINGS_FILE, "r", encoding="utf-8") as f:
+            embeddings = json.load(f)
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        return {}
+
+    if not isinstance(embeddings, dict):
+        return {}
+
+    return embeddings
+
+
+@contextlib.contextmanager
+def isolated_stores(tmp_dir=None):
+    """
+    Point every store path used by retrieval at a throwaway directory
+    (or a TemporaryDirectory if none is given), then restore originals.
+
+    This exists so tests — and library users running batch jobs — can
+    exercise retrieval without touching production files.  It mutates
+    only module-level path constants for the duration of the block.
+    """
+    import long_term_memory as ltm
+
+    created = None
+    if tmp_dir is None:
+        created = tempfile.TemporaryDirectory(prefix="memory_retrieval_")
+        root = created.name
+    else:
+        root = str(tmp_dir)
+        os.makedirs(root, exist_ok=True)
+
+    saved = {
+        "MEMORY_FILE": ltm.MEMORY_FILE,
+        "ARCHIVE_FILE": ltm.ARCHIVE_FILE,
+        "EMBEDDINGS_FILE": ltm.EMBEDDINGS_FILE,
+        "BACKUP_FILE": getattr(ltm, "BACKUP_FILE", None),
+    }
+
+    def relocate(name):
+        return os.path.join(root, os.path.basename(name))
 
     try:
-        with open(
-            EMBEDDING_FILE,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return json.load(f)
-
-    except FileNotFoundError:
-
-        return {}
+        ltm.MEMORY_FILE = relocate(ltm.MEMORY_FILE)
+        ltm.ARCHIVE_FILE = relocate(ltm.ARCHIVE_FILE)
+        ltm.EMBEDDINGS_FILE = relocate(ltm.EMBEDDINGS_FILE)
+        if saved["BACKUP_FILE"] is not None:
+            ltm.BACKUP_FILE = relocate(saved["BACKUP_FILE"])
+        yield root
+    finally:
+        ltm.MEMORY_FILE = saved["MEMORY_FILE"]
+        ltm.ARCHIVE_FILE = saved["ARCHIVE_FILE"]
+        ltm.EMBEDDINGS_FILE = saved["EMBEDDINGS_FILE"]
+        if saved["BACKUP_FILE"] is not None:
+            ltm.BACKUP_FILE = saved["BACKUP_FILE"]
+        if created is not None:
+            with contextlib.suppress(OSError):
+                created.cleanup()
 
 
 
 # --------------------------------------------------
-# Cosine Similarity
+# Cosine Similarity (delegates to the engine implementation)
 # --------------------------------------------------
 
 def cosine_similarity(vec1, vec2):
-
-    if not vec1 or not vec2:
-        return 0
-
-
-    dot = sum(
-        a*b
-        for a,b in zip(vec1,vec2)
-    )
-
-
-    norm1 = math.sqrt(
-        sum(a*a for a in vec1)
-    )
-
-    norm2 = math.sqrt(
-        sum(a*a for a in vec2)
-    )
-
-
-    if norm1 == 0 or norm2 == 0:
-        return 0
-
-
-    return dot/(norm1*norm2)
+    """
+    Thin wrapper over long_term_memory.cosine_similarity so callers of
+    this module keep a stable local name.  Engine behavior is reused
+    verbatim: empty/zero vectors score 0.
+    """
+    return _engine_cosine(vec1, vec2)
 
 
 
@@ -105,6 +150,16 @@ def calculate_memory_score(
         0.5
     )
 
+    # STAGE 21 determinism fix: confidence must be numeric before it
+    # enters the weighted sum; a malformed value fails closed to the
+    # neutral default instead of raising TypeError mid-scoring.
+    try:
+        confidence = float(confidence)
+    except (ValueError, TypeError):
+        confidence = 0.5
+
+    confidence = max(0.0, min(1.0, confidence))
+
 
     lifecycle_map = {
 
@@ -140,7 +195,25 @@ def calculate_memory_score(
     )
 
 
-    age = time.time() - timestamp
+    # STAGE 21 determinism fix: the engine stores created_at as an ISO
+    # string (current_timestamp()), but this code treated it as a unix
+    # float.  Subtracting str - float raised TypeError on every real
+    # record, so retrieve_memories() crashed in practice.  We now parse
+    # both representations; unparseable timestamps fail closed to age 0
+    # (maximum recency weight), matching days_since()'s contract.
+    if isinstance(timestamp, str):
+        from datetime import datetime, timezone
+
+        try:
+            parsed = datetime.fromisoformat(timestamp)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            epoch = datetime.fromtimestamp(0, tz=timezone.utc)
+            timestamp = (parsed - epoch).total_seconds()
+        except (ValueError, TypeError):
+            timestamp = time.time()
+
+    age = max(0.0, time.time() - float(timestamp))
 
 
     recency = math.exp(
@@ -216,11 +289,16 @@ def retrieve_memories(
             continue
 
 
-
-        similarity = cosine_similarity(
-            query_embedding,
-            embeddings[memory_id]
-        )
+        # STAGE 21 fail-closed guard: a corrupted embedding entry
+        # (non-numeric payload) must produce a violation-free skip,
+        # never an exception — same contract as the integrity engine.
+        try:
+            similarity = cosine_similarity(
+                query_embedding,
+                embeddings[memory_id]
+            )
+        except (TypeError, ValueError):
+            continue
 
 
         score = calculate_memory_score(
