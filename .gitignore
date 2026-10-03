@@ -1,3 +1,10 @@
 # Python compiled files
 __pycache__/
 *.pyc
+.env
+my_research_crew/
+.venv/
+agent_phase1.zip
+.pytest_cache/
+learn.txt
+*.bak
