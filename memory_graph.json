@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-09-24T14:10:47.352841+00:00",
+  "updated_at": "2026-10-04T14:45:26.112290+00:00",
   "nodes": [
     {
       "id": "ent_1bef59173bd6",
@@ -9,9 +9,10 @@
       "canonical_name": "mechanical engineering",
       "type": "DOMAIN",
       "confidence": 0.9,
-      "mention_count": 1,
+      "mention_count": 2,
       "memory_ids": [
-        "61ceed2a-8915-47c8-8542-408182b70478"
+        "61ceed2a-8915-47c8-8542-408182b70478",
+        "d34984af-5a94-4615-b733-fe06b7e9c320"
       ],
       "entity_chain_id": "ent_1bef59173bd6",
       "version": 1,
@@ -20,7 +21,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4626,
+      "lifecycle_score": 0.7933,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -46,7 +47,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.6563,
+      "lifecycle_score": 0.4528,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -69,7 +70,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.566,
+      "lifecycle_score": 0.3625,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -96,7 +97,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.6896,
+      "lifecycle_score": 0.4859,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -119,7 +120,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4626,
+      "lifecycle_score": 0.3574,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -142,7 +143,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.5675,
+      "lifecycle_score": 0.3625,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -165,10 +166,24 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4626,
+      "lifecycle_score": 0.3575,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
+    },
+    {
+      "id": "8f7581c1-01c1-4d7a-b479-e2a9976a72d0",
+      "kind": "memory",
+      "memory": "The user has a todo.txt file.",
+      "type": "other",
+      "importance": 2,
+      "confidence": 0.7,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "21b261cd-cc46-49db-ad3a-b1c8cb3f9c97",
+      "version": 1,
+      "valid_from": "2026-10-04T14:45:26.090654+00:00",
+      "valid_to": null
     },
     {
       "id": "a7d59355-09b0-488f-bd27-b879dae69e11",
@@ -218,7 +233,7 @@
       "memory": "User uses Abaqus for finite element analysis in mechanical engineering projects.",
       "type": "usage",
       "importance": 5,
-      "confidence": 0.9,
+      "confidence": 0.93,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
@@ -269,6 +284,20 @@
       "valid_to": null
     },
     {
+      "id": "2d985a6f-4c92-45e6-bf46-aa8a7e04bb1c",
+      "kind": "memory",
+      "memory": "The user is Alireza.",
+      "type": "person",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "cf22cd46-b15b-4847-a86c-da2f1126b157",
+      "version": 1,
+      "valid_from": "2026-10-04T14:12:12.042198+00:00",
+      "valid_to": null
+    },
+    {
       "id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
       "kind": "memory",
       "memory": "User started learning Abaqus.",
@@ -308,6 +337,34 @@
       "chain_id": "f9fc41c6-64fa-47d0-a837-0e487178d03b",
       "version": 1,
       "valid_from": "2026-09-22T12:31:04.594636+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "kind": "memory",
+      "memory": "The user’s name is Alireza and they are a mechanical engineering student.",
+      "type": "fact",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "archived",
+      "temporal_status": "historical",
+      "chain_id": "feee584d-bbad-4bbc-a8cc-b8e20632897c",
+      "version": 1,
+      "valid_from": "2026-10-03T16:18:49.113576+00:00",
+      "valid_to": "2026-10-04T13:28:55.589744+00:00"
+    },
+    {
+      "id": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "kind": "memory",
+      "memory": "User's name is Alireza and they study mechanical engineering.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "feee584d-bbad-4bbc-a8cc-b8e20632897c",
+      "version": 2,
+      "valid_from": "2026-10-04T13:28:55.589744+00:00",
       "valid_to": null
     }
   ],
@@ -385,6 +442,22 @@
       "evidence": "entity extraction"
     },
     {
+      "source": "61ceed2a-8915-47c8-8542-408182b70478",
+      "target": "ent_1bef59173bd6",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "target": "ent_1bef59173bd6",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
       "source": "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd",
       "target": "ent_61fcc054c9da",
       "type": "MEMORY_HAS_ENTITY",
@@ -395,14 +468,6 @@
     {
       "source": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
       "target": "ent_464c299b178c",
-      "type": "MEMORY_HAS_ENTITY",
-      "relation": "MENTIONS",
-      "confidence": 0.9,
-      "evidence": "entity extraction"
-    },
-    {
-      "source": "61ceed2a-8915-47c8-8542-408182b70478",
-      "target": "ent_1bef59173bd6",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
       "confidence": 0.9,
@@ -497,6 +562,30 @@
       "evidence": "temporal_change"
     },
     {
+      "source": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "target": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDES",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "target": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "target": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "temporal_change"
+    },
+    {
       "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
       "target": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
       "type": "TEMPORAL_SUPERSEDES",
@@ -529,8 +618,32 @@
       "evidence": "linked_to_new_version"
     },
     {
+      "source": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "target": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "target": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "linked_to_new_version"
+    },
+    {
       "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
       "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "TEMPORAL_SAME_CHAIN",
+      "relation": "NEXT_VERSION",
+      "confidence": 1.0,
+      "evidence": "shared temporal chain"
+    },
+    {
+      "source": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+      "target": "d34984af-5a94-4615-b733-fe06b7e9c320",
       "type": "TEMPORAL_SAME_CHAIN",
       "relation": "NEXT_VERSION",
       "confidence": 1.0,

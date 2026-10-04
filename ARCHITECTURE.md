@@ -14,7 +14,25 @@ tools (files, Telegram, Gmail). The model decides what to do; code runs the loop
 2. **Memory tools** – `tools_memory.py`
    - 6 tools over `long_term_memory.py`: remember, recall, update_memory,
      end_memory, forget, list_recent_memories.
-3. **Entry point** – `run_agent.py` (Groq, model `openai/gpt-oss-20b`, key in `.env`).
+3. **LLM clients** – `ollama_client.py` (local Ollama via httpx, default `llama3.2:3b`)
+   or the Groq SDK. Chosen by `LLM_PROVIDER` in `.env` (`ollama` default, or `groq`).
+4. **Memory modes** (`MEMORY_MODE` in `.env`)
+   - `auto` (default with Ollama): `auto_memory.py` runs a separate JSON-extraction call on
+     every user message and saves facts; `MemoryTools.context_for` injects memories into the
+     prompt. No tool calling needed (small models are unreliable at it).
+   - `tools` (default with Groq): the model calls remember/recall itself.
+5. **File access** – `tools_files.py` (workspace-restricted: list_dir, read_file,
+   write_file with confirmation + backups, no delete) and `commands.py` (slash commands
+   `/ls`, `/read`, `/files`, `/clear`, `/help` that work with any model; `/read` attaches
+   a file to the next questions). Workspace: `AGENT_WORKSPACE` in `.env`
+   (default `D:\agent_workspace`). Real file *tools* for the model are registered only when
+   `MEMORY_MODE=tools` or `FILE_TOOLS=on` (needs a model that is good at tool calling).
+6. **Telegram front-end** – `telegram_bot.py` (long polling with httpx, no extra packages).
+   Only answers the user id in `TELEGRAM_ALLOWED_USER_ID`, private chats only. Uses
+   `TELEGRAM_PROXY` only (system proxy settings are ignored on purpose). The token never
+   appears in logs/errors. Same slash commands as the terminal. Writes are denied (no
+   interactive confirmation over Telegram yet).
+7. **Entry point** – `run_agent.py` (`build_agent(interactive=False)` is used by the bot).
 
 ## Existing system (unchanged)
 - `long_term_memory.py`, `memory_entities.py`, `memory_*`: storage, embeddings
@@ -22,11 +40,10 @@ tools (files, Telegram, Gmail). The model decides what to do; code runs the loop
 - `test_ai.py`: the old pipeline-style chat (several LLM calls per message).
 
 ## Tests
-- `agent_loop_test.py`: offline (fake client + fake backend).
-  Run: `python -m pytest agent_loop_test.py`
+- `agent_loop_test.py`, `ollama_client_test.py`, `auto_memory_test.py`, `files_test.py`, `telegram_bot_test.py`: offline (fake client/server + fake backend).
+  Run: `python -m pytest agent_loop_test.py ollama_client_test.py auto_memory_test.py files_test.py telegram_bot_test.py`
 
 ## Planned next
-- File tools (allowlisted folder, read-only first, writes need confirmation)
-- Telegram bot (whitelist user ID) + scheduler for hourly posts
+- Scheduler for hourly channel posts (bot must be admin of a channel you create)
 - Gmail (read-only OAuth)
 - Move the old analyze_* pipeline into a periodic background job

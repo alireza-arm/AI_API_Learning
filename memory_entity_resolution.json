@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-23T21:58:26.551768+00:00",
+  "updated_at": "2026-10-04T13:29:07.982836+00:00",
   "resolutions": [
     {
       "resolution_id": "ers_df366edeef78",
@@ -97,6 +97,18 @@
       "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
       "memory_id": "5090d7f9-f979-4211-9de4-139af9711428",
       "timestamp": "2026-09-23T21:58:26.551725+00:00"
+    },
+    {
+      "resolution_id": "ers_1fbaffbeb777",
+      "candidate_name": "mechanical engineering",
+      "entity_id": "ent_1bef59173bd6",
+      "entity_name": "mechanical engineering",
+      "score": 1.0,
+      "method": "compatible_core_identity",
+      "action": "LINK",
+      "source_text": "my name is alireza and i study mechanical engineering REMEBER IT.",
+      "memory_id": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "timestamp": "2026-10-04T13:29:07.982822+00:00"
     }
   ]
 }

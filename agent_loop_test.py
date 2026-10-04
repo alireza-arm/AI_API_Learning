@@ -27,7 +27,10 @@ class FakeClient:
 
     def _create(self, **kwargs):
         self.calls.append(kwargs)
-        return self.script.pop(0)
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
 
 
 class FakeBackend:
@@ -136,3 +139,55 @@ def test_memory_tools_validation_and_trimming():
     assert "extra" not in res and res["memory"] == "likes tea"
     assert tools.update("", "new")["ok"] is False
     assert tools.forget("likes tea")["ok"] is True
+
+
+# ---------- retry ----------
+
+class ApiError(Exception):
+    def __init__(self, status_code):
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+def test_transient_error_is_retried_then_succeeds():
+    events, slept = [], []
+    agent, client, _ = make_agent([ApiError(403), ApiError(429), reply("ok")],
+                                  on_event=lambda *a: events.append(a), sleep=slept.append)
+    assert agent.run_turn("x") == "ok"
+    assert len(client.calls) == 3 and slept == [1.0, 2.0]
+    assert [e[0] for e in events] == ["retry", "retry"]
+
+
+def test_retry_gives_up_and_non_retryable_raises_immediately():
+    agent, client, _ = make_agent([ApiError(403)] * 3, sleep=lambda s: None)
+    try:
+        agent.run_turn("x")
+        assert False, "should have raised"
+    except ApiError:
+        assert len(client.calls) == 3  # 1 try + 2 retries
+    agent, client, _ = make_agent([ApiError(401)], sleep=lambda s: None)
+    try:
+        agent.run_turn("x")
+        assert False, "should have raised"
+    except ApiError:
+        assert len(client.calls) == 1
+
+
+def test_context_for_mixes_relevant_and_recent_without_duplicates():
+    backend = FakeBackend()
+    backend.items = [
+        {"memory": "likes tea", "type": "preference", "importance": 3, "updated_at": "2026-01-01"},
+        {"memory": "studies mechanics", "type": "fact", "importance": 5, "updated_at": "2026-02-01"},
+    ]
+    context = MemoryTools(backend).context_for("what do I like?")
+    assert context.splitlines() == ["- likes tea", "- studies mechanics"]
+
+
+def test_failing_context_provider_is_reported_not_hidden():
+    def broken(_):
+        raise ModuleNotFoundError("sentence_transformers")
+    events = []
+    agent, _, _ = make_agent([reply("ok")], context_provider=broken,
+                             on_event=lambda *a: events.append(a))
+    assert agent.run_turn("x") == "ok"
+    assert events[0][0] == "warning" and "sentence_transformers" in events[0][2]

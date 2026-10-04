@@ -56,7 +56,7 @@ class MemoryTools:
         if not query:
             return {"ok": False, "error": "query is empty"}
         results = self.backend.search_memory(
-            query, max_results=_clamp(max_results, 1, 10, 5))
+            query, max_results=_clamp(max_results, 1, 10, 5), threshold=0.2)
         return {"ok": True, "results": [
             {"memory": r.get("memory"),
              "type": r.get("type"),
@@ -100,6 +100,21 @@ class MemoryTools:
             {"memory": i.get("memory"), "type": i.get("type"),
              "importance": i.get("importance")}
             for i in items[:_clamp(n, 1, 30, 10)]]}
+
+    def context_for(self, user_text, n_relevant=3, n_recent=3):
+        """Memories to put in front of the model: best matches plus the most recent ones.
+
+        The recent ones are a safety net: the embedding model is English-only and
+        short questions often score low, so a plain search can miss obvious facts.
+        """
+        lines, seen = [], set()
+        found = self.backend.search_memory(user_text, max_results=n_relevant, threshold=0.2)
+        for item in list(found) + self.list_recent(n_recent)["results"]:
+            text = item.get("memory")
+            if text and text not in seen:
+                seen.add(text)
+                lines.append(f"- {text}")
+        return "\n".join(lines) or None
 
     # ---- registration ---------------------------------------------------
 

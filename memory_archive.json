@@ -137,5 +137,56 @@
         "causal_links": [],
         "archived_at": "2026-09-23T22:12:21.101034+00:00",
         "archive_reason": "manual_delete_request"
+    },
+    {
+        "memory": "The user’s name is Alireza and they are a mechanical engineering student.",
+        "type": "fact",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-10-03T16:18:49.113576+00:00",
+        "updated_at": "2026-10-04T13:28:55.763528+00:00",
+        "last_accessed": "2026-10-04T13:28:52.469324+00:00",
+        "access_count": 14,
+        "status": "archived",
+        "memory_id": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
+        "chain_id": "feee584d-bbad-4bbc-a8cc-b8e20632897c",
+        "version": 1,
+        "valid_from": "2026-10-03T16:18:49.113576+00:00",
+        "valid_to": "2026-10-04T13:28:55.589744+00:00",
+        "supersedes": null,
+        "superseded_by": "d34984af-5a94-4615-b733-fe06b7e9c320",
+        "temporal_status": "historical",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-10-03T16:18:49.113672+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "new_memory",
+                "source_text": "agent_tool:remember",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-10-04T13:28:55.603856+00:00",
+                "action": "SUPERSEDE",
+                "event": "CHANGE",
+                "reason": "conflict_replaced",
+                "source_text": "my name is alireza and i study mechanical engineering REMEBER IT.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-10-04T13:28:55.763518+00:00",
+                "action": "SUPERSEDED_BY",
+                "event": "CHANGE",
+                "reason": "linked_to_new_version",
+                "source_text": "my name is alireza and i study mechanical engineering REMEBER IT.",
+                "related_memory_ids": [
+                    "d34984af-5a94-4615-b733-fe06b7e9c320"
+                ]
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-10-04T13:28:55.603838+00:00",
+        "archive_reason": "conflict_replaced"
     }
 ]
