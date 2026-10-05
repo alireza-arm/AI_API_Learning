@@ -5,8 +5,12 @@
     TELEGRAM_ALLOWED_USER_ID=123456   (your numeric id from @userinfobot)
     TELEGRAM_PROXY=http://127.0.0.1:10808   (optional)
     TELEGRAM_POLL_TIMEOUT=10          (optional, seconds to wait per poll)
+    TELEGRAM_CHANNEL_ID=@my_channel   (optional, enables scheduled channel posts)
+    POST_INTERVAL_HOURS=2             (optional)
+    POST_LANGUAGE=English             (optional, e.g. Persian)
+    POST_MODE=review                  (optional: review = you approve every post, auto = no review)
 
-Run:   py telegram_bot.py --check   (tests token + connection, then exits)
+Run:   py telegram_bot.py --check   (tests token, connection and channel, then exits)
        py telegram_bot.py           (starts the bot)
 """
 
@@ -17,6 +21,18 @@ import time
 import httpx
 
 from commands import HELP, handle_command
+
+POST_COMMANDS = ("/preview", "/approve", "/skip", "/redraft", "/post_now",
+                 "/post_pause", "/post_resume", "/post_status")
+POST_HELP = """Channel posting:
+  /preview       write a draft (not published)
+  /approve       publish the waiting draft exactly as shown
+  /skip          discard the waiting draft
+  /redraft       rewrite the draft
+  /post_now      publish now (the waiting draft, or a fresh one)
+  /post_pause    stop automatic posts / drafts
+  /post_resume   restart them
+  /post_status   show mode and schedule"""
 
 MAX_MESSAGE = 4000  # Telegram's limit is 4096 characters
 
@@ -32,9 +48,8 @@ def split_message(text, limit=MAX_MESSAGE):
 
 def make_client(proxy=None, timeout=60.0):
     # trust_env=False: ignore Windows/system proxy settings (they can point to a dead port);
-    # only TELEGRAM_PROXY is used.
-    # No connection reuse: proxies/VPNs often cut idle keep-alive connections, which shows up
-    # as "Server disconnected without sending a response".
+    # only TELEGRAM_PROXY is used. No connection reuse: proxies/VPNs often cut idle
+    # keep-alive connections ("Server disconnected without sending a response").
     options = dict(timeout=timeout, trust_env=False,
                    limits=httpx.Limits(max_keepalive_connections=0))
     if proxy:
@@ -67,6 +82,12 @@ class TelegramAPI:
     def get_me(self):
         return self.call("getMe")
 
+    def get_chat(self, chat_id):
+        return self.call("getChat", chat_id=chat_id)
+
+    def get_chat_member(self, chat_id, user_id):
+        return self.call("getChatMember", chat_id=chat_id, user_id=user_id)
+
     def get_updates(self, offset=None, timeout=30):
         params = {"timeout": timeout, "allowed_updates": ["message"]}
         if offset is not None:
@@ -84,11 +105,28 @@ class TelegramAPI:
             pass
 
 
+def check_channel(api, channel_id, bot_id):
+    """Return (ok, message) about whether the bot can post to the channel."""
+    try:
+        chat = api.get_chat(channel_id)
+        member = api.get_chat_member(channel_id, bot_id)
+    except TelegramError as exc:
+        return False, f"Cannot access channel {channel_id}: {exc}"
+    title = chat.get("title", channel_id)
+    status = member.get("status")
+    if status == "creator" or (status == "administrator" and member.get("can_post_messages")):
+        return True, f"Channel OK: '{title}' (the bot can post)"
+    if status == "administrator":
+        return False, f"The bot is admin of '{title}' but lacks the 'Post messages' permission."
+    return False, f"The bot is not an administrator of '{title}'. Add it as admin with 'Post messages'."
+
+
 class Bot:
     def __init__(self, api, agent, files, allowed_user_id, log=print, sleep=time.sleep,
-                 poll_timeout=10):
+                 poll_timeout=10, poster=None):
         self.api, self.agent, self.files = api, agent, files
         self.poll_timeout = poll_timeout  # short on purpose: proxies cut long idle waits
+        self.poster = poster              # optional channel_poster.Poster
         self.allowed_user_id = int(allowed_user_id)
         self.log, self.sleep = log, sleep
         self.offset = None
@@ -109,10 +147,16 @@ class Bot:
         chat_id = chat["id"]
         command, _, rest = text.partition(" ")
         text = command.split("@")[0] + (" " + rest if rest else "")  # "/ls@mybot" -> "/ls"
-        if text.strip() in ("/start", "/help"):
+        word = text.split()[0] if text.split() else ""
+        if word in ("/start", "/help"):
             output = HELP.replace("  /exit          quit", "").strip()
-        elif text.strip() == "/exit":
+            if self.poster:
+                output += "\n" + POST_HELP
+        elif word == "/exit":
             output = "/exit only works in the terminal."
+        elif word in POST_COMMANDS:
+            self.api.send_typing(chat_id)
+            output = self.handle_post_command(word)
         else:
             output = handle_command(text, self.files, self.agent)
         if output is None:
@@ -124,6 +168,37 @@ class Bot:
                 output = "Sorry, something went wrong while answering. Try again."
         self.api.send_message(chat_id, output)
         self.log(f"handled a message, replied in {time.monotonic() - started:.1f}s")  # no content logged
+
+    def handle_post_command(self, command):
+        if not self.poster:
+            return "Channel posting is not configured (set TELEGRAM_CHANNEL_ID in .env)."
+        poster = self.poster
+        if command in ("/preview", "/redraft"):
+            draft = poster.draft()
+            if not draft:
+                return "Could not generate a usable draft. Try again."
+            return poster.draft_message(draft[0], draft[1])
+        if command == "/approve" and not poster.pending:
+            return "No draft is waiting. Use /preview to write one."
+        if command in ("/approve", "/post_now"):
+            had_draft = poster.pending is not None
+            try:
+                if not poster.post(use_pending=True):
+                    return "Could not generate a usable post. Try again."
+            except TelegramError as exc:
+                return f"Could not post: {exc}"
+            return "Published the draft you approved." if had_draft else "Posted to the channel."
+        if command == "/skip":
+            if not poster.skip():
+                return "No draft is waiting."
+            return f"Draft discarded. The next one comes in about {poster.interval / 3600:g} h."
+        if command == "/post_pause":
+            poster.set_paused(True)
+            return "Automatic posting paused."
+        if command == "/post_resume":
+            poster.set_paused(False)
+            return "Automatic posting resumed."
+        return poster.status()
 
     def poll_once(self, timeout=None):
         """Fetch and handle one batch. Returns how many updates were handled."""
@@ -147,6 +222,8 @@ class Bot:
     def run_forever(self):
         while True:
             self.poll_once()
+            if self.poster:
+                self.poster.tick()
 
 
 def main():
@@ -167,6 +244,13 @@ def main():
         print("Check that your VPN/proxy is on and TELEGRAM_PROXY is correct.")
         return 1
     print(f"Connected as @{me.get('username')}")
+
+    channel = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
+    if channel:
+        ok, message = check_channel(api, channel, me["id"])
+        print(message)
+        if not ok:
+            channel = ""   # run the chat bot anyway, but without channel posting
     if "--check" in sys.argv:
         print("Check OK. Run without --check to start the bot.")
         return 0
@@ -174,7 +258,23 @@ def main():
     from run_agent import build_agent
     agent, files = build_agent(interactive=False)
     poll_timeout = int(os.getenv("TELEGRAM_POLL_TIMEOUT", "10") or 10)
-    bot = Bot(api, agent, files, user_id, poll_timeout=poll_timeout)
+    poster = None
+    if channel:
+        from pathlib import Path
+        from channel_poster import PostGenerator, Poster
+        hours = float(os.getenv("POST_INTERVAL_HOURS", "2") or 2)
+        language = os.getenv("POST_LANGUAGE", "English") or "English"
+        mode = "auto" if os.getenv("POST_MODE", "review").strip().lower() == "auto" else "review"
+        state_file = os.getenv("POST_STATE_FILE") or str(Path(__file__).with_name("post_state.json"))
+        poster = Poster(api, PostGenerator(agent.client, agent.model, language),
+                        channel, hours * 3600, state_file, log=print, mode=mode,
+                        notify=lambda text: api.send_message(int(user_id), text))
+        if mode == "review":
+            print(f"Channel posting: REVIEW mode. Every {hours:g} h a draft is sent to you in Telegram; "
+                  f"nothing is published until you send /approve.")
+        else:
+            print(f"Channel posting: AUTO mode, every {hours:g} h to {channel} ({language}), no review.")
+    bot = Bot(api, agent, files, user_id, poll_timeout=poll_timeout, poster=poster)
     print(f"Workspace: {files.root}\nBot is running. Message it on Telegram. Press Ctrl+C to stop.")
     try:
         bot.run_forever()

@@ -32,7 +32,18 @@ tools (files, Telegram, Gmail). The model decides what to do; code runs the loop
    `TELEGRAM_PROXY` only (system proxy settings are ignored on purpose). The token never
    appears in logs/errors. Same slash commands as the terminal. Writes are denied (no
    interactive confirmation over Telegram yet).
-7. **Entry point** – `run_agent.py` (`build_agent(interactive=False)` is used by the bot).
+7. **Channel posts** – `channel_poster.py`: one mechanical-engineering post every
+   `POST_INTERVAL_HOURS` (default 2) to `TELEGRAM_CHANNEL_ID` (the bot must be a channel admin
+   with "Post messages"). Topics rotate; posts are written by calling the model directly with a
+   fixed prompt, so agent memory/files are never included. Output is cleaned (no links/markdown)
+   and rejected if too short/long or a refusal. State in `post_state.json` (survives restarts,
+   no catch-up posts after downtime, retry delay on failure).
+   `POST_MODE=review` (default): every interval a draft is sent to the owner and NOTHING is
+   published until `/approve` (`/skip` discards, `/redraft` rewrites; the pending draft is stored
+   in the state file). `POST_MODE=auto` publishes without review.
+   Owner commands in the bot chat: /preview /approve /skip /redraft /post_now /post_pause
+   /post_resume /post_status. `py telegram_bot.py --check` also verifies the channel permissions.
+8. **Entry point** – `run_agent.py` (`build_agent(interactive=False)` is used by the bot).
 
 ## Existing system (unchanged)
 - `long_term_memory.py`, `memory_entities.py`, `memory_*`: storage, embeddings
@@ -40,10 +51,10 @@ tools (files, Telegram, Gmail). The model decides what to do; code runs the loop
 - `test_ai.py`: the old pipeline-style chat (several LLM calls per message).
 
 ## Tests
-- `agent_loop_test.py`, `ollama_client_test.py`, `auto_memory_test.py`, `files_test.py`, `telegram_bot_test.py`: offline (fake client/server + fake backend).
-  Run: `python -m pytest agent_loop_test.py ollama_client_test.py auto_memory_test.py files_test.py telegram_bot_test.py`
+- `agent_loop_test.py`, `ollama_client_test.py`, `auto_memory_test.py`, `files_test.py`, `telegram_bot_test.py`, `channel_poster_test.py`: offline (fake client/server + fake backend).
+  Run: `python -m pytest agent_loop_test.py ollama_client_test.py auto_memory_test.py files_test.py telegram_bot_test.py channel_poster_test.py`
 
 ## Planned next
-- Scheduler for hourly channel posts (bot must be admin of a channel you create)
+- Run the bot in the background at Windows start (Task Scheduler)
 - Gmail (read-only OAuth)
 - Move the old analyze_* pipeline into a periodic background job

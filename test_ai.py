@@ -2347,8 +2347,21 @@ while True:
     relevant_memories = search_memory(
         user_input,
         max_results=5,
-        threshold=0.35
+        threshold=0.20
     )
+
+    # Fallback: the embedding model only understands English, so a question in another
+    # language (or a very short one) often matches nothing. Also include the most
+    # recent memories so the assistant can still answer.
+    seen_ids = {item.get("memory_id") for item in relevant_memories}
+    recent_memories = sorted(
+        get_memory(),
+        key=lambda item: item.get("updated_at") or "",
+        reverse=True
+    )
+    for item in recent_memories[:3]:
+        if item.get("memory_id") not in seen_ids:
+            relevant_memories.append({**item, "similarity": 0.0})
 
     # ==================================================
     # Build Memory Context

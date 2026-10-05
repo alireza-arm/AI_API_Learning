@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-10-04T14:45:26.112290+00:00",
+  "updated_at": "2026-10-05T10:02:07.795100+00:00",
   "nodes": [
     {
       "id": "ent_1bef59173bd6",
@@ -21,7 +21,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.7933,
+      "lifecycle_score": 0.6101,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -47,7 +47,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4528,
+      "lifecycle_score": 0.4503,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -70,7 +70,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3625,
+      "lifecycle_score": 0.36,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -97,7 +97,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4859,
+      "lifecycle_score": 0.4835,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -120,7 +120,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3574,
+      "lifecycle_score": 0.3554,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -143,7 +143,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3625,
+      "lifecycle_score": 0.3601,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -166,10 +166,47 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3575,
+      "lifecycle_score": 0.3554,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
+    },
+    {
+      "id": "ent_dd623bc0a3f1",
+      "kind": "entity",
+      "name": "Alireza",
+      "canonical_name": "alireza",
+      "type": "PERSON",
+      "confidence": 0.95,
+      "mention_count": 1,
+      "memory_ids": [
+        "ece00864-4fc9-47c1-ac84-22107574e7d0"
+      ],
+      "entity_chain_id": "ent_dd623bc0a3f1",
+      "version": 1,
+      "valid_from": "2026-10-05T05:01:57.589225+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.7608,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "kind": "memory",
+      "memory": "The user is Alireza.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "archived",
+      "temporal_status": "historical",
+      "chain_id": "1918627b-bbee-4823-98e5-bc64abae3828",
+      "version": 1,
+      "valid_from": "2026-10-05T05:00:06.724084+00:00",
+      "valid_to": "2026-10-05T05:01:57.589225+00:00"
     },
     {
       "id": "8f7581c1-01c1-4d7a-b479-e2a9976a72d0",
@@ -177,7 +214,7 @@
       "memory": "The user has a todo.txt file.",
       "type": "other",
       "importance": 2,
-      "confidence": 0.7,
+      "confidence": 0.82,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "21b261cd-cc46-49db-ad3a-b1c8cb3f9c97",
@@ -205,12 +242,26 @@
       "memory": "User is learning Python.",
       "type": "learning",
       "importance": 5,
-      "confidence": 0.9,
+      "confidence": 0.99,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "7423d113-dbc2-4b21-af4c-889ee0da7d58",
       "version": 1,
       "valid_from": "2026-09-22T12:31:28.908659+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "c3936197-72e2-40aa-b365-2eb07f725fc4",
+      "kind": "memory",
+      "memory": "User wants to create a notes.txt file with 3 study tips.",
+      "type": "other",
+      "importance": 1,
+      "confidence": 0.7,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "7f3caffd-fcf0-4d97-b25c-07d26299165d",
+      "version": 1,
+      "valid_from": "2026-10-05T10:02:07.775894+00:00",
       "valid_to": null
     },
     {
@@ -239,6 +290,20 @@
       "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
       "version": 2,
       "valid_from": "2026-09-23T21:58:22.433615+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "kind": "memory",
+      "memory": "The user is Alireza.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "a0e82a23-5c38-4208-a0ad-9948f7e1fe2c",
+      "version": 1,
+      "valid_from": "2026-10-05T05:01:57.589225+00:00",
       "valid_to": null
     },
     {
@@ -290,12 +355,12 @@
       "type": "person",
       "importance": 5,
       "confidence": 0.99,
-      "status": "active",
-      "temporal_status": "current",
+      "status": "archived",
+      "temporal_status": "historical",
       "chain_id": "cf22cd46-b15b-4847-a86c-da2f1126b157",
       "version": 1,
       "valid_from": "2026-10-04T14:12:12.042198+00:00",
-      "valid_to": null
+      "valid_to": "2026-10-05T05:00:06.724084+00:00"
     },
     {
       "id": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
@@ -458,6 +523,14 @@
       "evidence": "entity extraction"
     },
     {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "ent_dd623bc0a3f1",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.95,
+      "evidence": "entity extraction"
+    },
+    {
       "source": "e5c8d9a2-b275-42f6-9c74-8e21cff0ecbd",
       "target": "ent_61fcc054c9da",
       "type": "MEMORY_HAS_ENTITY",
@@ -586,6 +659,22 @@
       "evidence": "temporal_change"
     },
     {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User explicitly states their name."
+    },
+    {
       "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
       "target": "385da6f2-d06a-456e-95fa-948f9ebf04a7",
       "type": "TEMPORAL_SUPERSEDES",
@@ -632,6 +721,54 @@
       "relation": "PROVENANCE_RELATED",
       "confidence": 1.0,
       "evidence": "linked_to_new_version"
+    },
+    {
+      "source": "2d985a6f-4c92-45e6-bf46-aa8a7e04bb1c",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "2d985a6f-4c92-45e6-bf46-aa8a7e04bb1c",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User provided their name."
+    },
+    {
+      "source": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "target": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "target": "2d985a6f-4c92-45e6-bf46-aa8a7e04bb1c",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "target": "2d985a6f-4c92-45e6-bf46-aa8a7e04bb1c",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User provided their name."
+    },
+    {
+      "source": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "target": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User explicitly states their name."
     },
     {
       "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",

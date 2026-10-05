@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-05T05:01:59.014904+00:00",
+  "recoveries": [
+    {
+      "recovery_id": "erc_58f8012b4300",
+      "candidate_name": "Alireza",
+      "candidate_type": "PERSON",
+      "entity_id": "",
+      "entity_name": "",
+      "decision": "DIFFERENT",
+      "status": "NOT_FOUND",
+      "score": 0.0,
+      "method": "archive_empty",
+      "reason": "No sufficiently plausible archived identity was found.",
+      "source_text": "remember that my name is alireza.",
+      "memory_id": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "timestamp": "2026-10-05T05:01:59.014890+00:00"
+    }
+  ]
+}
