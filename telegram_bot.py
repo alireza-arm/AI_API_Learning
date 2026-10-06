@@ -97,6 +97,12 @@ class TelegramAPI:
     def send_message(self, chat_id, text):
         for chunk in split_message(text):
             self.call("sendMessage", chat_id=chat_id, text=chunk)
+            
+    def send_rich_message(self, chat_id, markdown=None, html=None):
+        """Send one rich message (Bot API 10.1+). Limit is ~32768 chars, so no splitting.
+        Raises TelegramError on failure (the caller can fall back to plain text)."""
+        rich = {"markdown": markdown} if markdown is not None else {"html": html}
+        return self.call("sendRichMessage", chat_id=chat_id, rich_message=rich)        
 
     def send_typing(self, chat_id):
         try:
@@ -156,7 +162,7 @@ class Bot:
             output = "/exit only works in the terminal."
         elif word in POST_COMMANDS:
             self.api.send_typing(chat_id)
-            output = self.handle_post_command(word)
+            output = self.handle_post_command(word, chat_id)
         else:
             output = handle_command(text, self.files, self.agent)
         if output is None:
@@ -169,7 +175,7 @@ class Bot:
         self.api.send_message(chat_id, output)
         self.log(f"handled a message, replied in {time.monotonic() - started:.1f}s")  # no content logged
 
-    def handle_post_command(self, command):
+    def handle_post_command(self, command, chat_id):
         if not self.poster:
             return "Channel posting is not configured (set TELEGRAM_CHANNEL_ID in .env)."
         poster = self.poster
@@ -177,7 +183,12 @@ class Bot:
             draft = poster.draft()
             if not draft:
                 return "Could not generate a usable draft. Try again."
-            return poster.draft_message(draft[0], draft[1])
+            if poster.rich:
+                try:
+                    self.api.send_rich_message(chat_id, markdown=draft[0])
+                except TelegramError as exc:
+                    return f"The draft could not be shown as a rich message: {exc}"
+            return poster.draft_message(draft[0], draft[1], rich=poster.rich)
         if command == "/approve" and not poster.pending:
             return "No draft is waiting. Use /preview to write one."
         if command in ("/approve", "/post_now"):
@@ -266,9 +277,12 @@ def main():
         language = os.getenv("POST_LANGUAGE", "English") or "English"
         mode = "auto" if os.getenv("POST_MODE", "review").strip().lower() == "auto" else "review"
         state_file = os.getenv("POST_STATE_FILE") or str(Path(__file__).with_name("post_state.json"))
-        poster = Poster(api, PostGenerator(agent.client, agent.model, language),
+        rich = os.getenv("POST_RICH", "off").strip().lower() in ("1", "true", "on", "yes")
+        poster = Poster(api, PostGenerator(agent.client, agent.model, language, rich=rich),
                         channel, hours * 3600, state_file, log=print, mode=mode,
-                        notify=lambda text: api.send_message(int(user_id), text))
+                        notify=lambda text: api.send_message(int(user_id), text),
+                        rich=rich,
+                        notify_rich=lambda text: api.send_rich_message(int(user_id), markdown=text))
         if mode == "review":
             print(f"Channel posting: REVIEW mode. Every {hours:g} h a draft is sent to you in Telegram; "
                   f"nothing is published until you send /approve.")

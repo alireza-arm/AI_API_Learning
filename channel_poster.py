@@ -37,6 +37,27 @@ Plain text only: no markdown, no links, no hashtags, no emojis.
 Be accurate. If you are not sure about a number, a standard or a fact, leave it out. Never invent studies, quotes or standards.
 No greeting and no closing question. Output only the post."""
 
+RICH_SYSTEM_PROMPT = """You write posts for a Telegram channel about mechanical engineering.
+The post is written in Rich Markdown, which Telegram renders natively.
+Write in {language}. Length: 100 to 250 words.
+
+Structure: start with one "## " heading (the title), then short paragraphs explaining ONE idea clearly, with a simple real-world example.
+
+Use these elements ONLY where they really help the reader. Many posts need just two or three of them:
+- Bold (**text**) for key terms; ==text== to highlight the single most important takeaway.
+- Lists ("- " for properties, "1. " for ordered steps) instead of long sentences that list things.
+- Formulas in LaTeX: inline $...$ and standalone $$...$$ on its own line. Write fractions with \\frac{{a}}{{b}}. Include a formula only if you are sure it is correct.
+- A table, only when comparing 2 or more items on the same attributes. Standard pipe table with a header separator row, at most 5 columns and 6 rows, short cells, never the | character inside a cell.
+- A quote ("> text") for one rule of thumb or warning. If that note is longer than about three lines, write it as one single paragraph inside <blockquote expandable>...</blockquote> instead.
+- Optional deeper explanation as a collapsible block: <details><summary>Short title</summary>, a blank line, the explanation, a blank line, </details>. The main text must make sense without opening it.
+
+Strict rules:
+- No links, no images, no hashtags, no emojis. Links are added by the system.
+- No other HTML tags except those above (and <sub> / <sup>).
+- Do not wrap the whole post in a code block.
+- Be accurate. If you are not sure about a number, a standard or a fact, leave it out. Never invent studies, quotes or standards.
+- No greeting and no closing question. Output only the post."""
+
 MIN_CHARS, MAX_CHARS = 60, 3500
 REFUSAL_RE = re.compile(r"^\s*(sorry|i can't|i cannot|i'm sorry|as an ai)", re.IGNORECASE)
 
@@ -53,6 +74,50 @@ def clean_post(text):
         return None
     return text
 
+ALLOWED_TAGS = {"details", "summary", "blockquote", "sub", "sup", "u"}
+MATH_RE = re.compile(r"\$\$.*?\$\$|\$[^$\n]+\$", re.DOTALL)
+TAG_RE = re.compile(r"<(/?)([a-zA-Z][\w-]*)([^>]*)>")
+SEP_RE = re.compile(r"^\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?$")
+MAX_RICH_CHARS, MAX_TABLE_COLS = 6000, 6  # Telegram itself allows 32768 chars / 20 columns
+
+
+def _tables_ok(lines):
+    """Every pipe table needs a separator row, equal column counts and few columns."""
+    block = []
+    for line in lines + [""]:
+        if line.strip().startswith("|"):
+            block.append(line.strip())
+            continue
+        if block:
+            counts = {len(row.strip("|").split("|")) for row in block}
+            if len(block) < 2 or not SEP_RE.match(block[1]) or len(counts) != 1 or max(counts) > MAX_TABLE_COLS:
+                return False
+            block = []
+    return True
+
+
+def clean_rich_post(text):
+    """Return a publishable Rich Markdown post, or None if the model output is unusable."""
+    if not text:
+        return None
+    text = re.sub(r"^```(?:markdown|md)?\s*\n(.*)\n```$", r"\1", text.strip(), flags=re.DOTALL)
+    text = re.sub(r"\[([^\]]*)\]\(https?://[^)]*\)", r"\1", text)  # models invent links
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if len(text) < MIN_CHARS or len(text) > MAX_RICH_CHARS or REFUSAL_RE.match(text):
+        return None
+    flat = MATH_RE.sub("M", text)
+    if "$" in flat:  # an unclosed formula
+        return None
+    depth = {}
+    for closing, name, _ in TAG_RE.findall(flat):
+        name = name.lower()
+        if name not in ALLOWED_TAGS:
+            return None
+        depth[name] = depth.get(name, 0) + (-1 if closing else 1)
+    if any(depth.values()):  # unbalanced <details> / <blockquote> ...
+        return None
+    return text if _tables_ok(text.splitlines()) else None
 
 def pick(index):
     """Deterministic rotation: every topic once, then again with the next angle."""
@@ -62,19 +127,21 @@ def pick(index):
 
 
 class PostGenerator:
-    def __init__(self, client, model, language="English", attempts=2):
+    def __init__(self, client, model, language="English", attempts=2, rich=False):
         self.client, self.model = client, model
-        self.language, self.attempts = language, attempts
+        self.language, self.attempts, self.rich = language, attempts, rich
 
     def generate(self, topic, angle):
+        prompt = RICH_SYSTEM_PROMPT if self.rich else SYSTEM_PROMPT
+        clean = clean_rich_post if self.rich else clean_post
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT.format(language=self.language)},
+            {"role": "system", "content": prompt.format(language=self.language)},
             {"role": "user", "content": f"Topic: {topic}. Angle: {angle}. Choose one specific sub-topic."},
         ]
         for _ in range(self.attempts):
             response = self.client.chat.completions.create(
                 model=self.model, messages=messages, temperature=0.7)
-            post = clean_post(response.choices[0].message.content)
+            post = clean(response.choices[0].message.content)
             if post:
                 return post
         return None
@@ -89,11 +156,13 @@ class Poster:
     """
 
     def __init__(self, api, generator, channel_id, interval_seconds, state_path,
-                 now=time.time, log=print, retry_seconds=600, mode="auto", notify=None):
+                 now=time.time, log=print, retry_seconds=600, mode="auto", notify=None,
+                 rich=False, notify_rich=None):
         self.api, self.generator, self.channel_id = api, generator, channel_id
         self.interval, self.state_path = interval_seconds, Path(state_path)
         self.now, self.log, self.retry_seconds = now, log, retry_seconds
         self.mode, self.notify = mode, notify
+        self.rich, self.notify_rich = rich, notify_rich
         self.retry_at = 0
         self.state = self._load()
         if "last_post_ts" not in self.state:   # first run: first post/draft after one full interval
@@ -127,9 +196,17 @@ class Poster:
         return (item["text"], item["topic"], item["angle"]) if item else None
 
     @staticmethod
-    def draft_message(text, topic):
-        return (f"Draft (NOT posted) - topic: {topic}\n\n{text}\n\n"
-                "/approve to publish exactly this - /skip to discard - /redraft to rewrite")
+    def draft_message(text, topic, rich=False):
+        controls = "/approve to publish exactly this - /skip to discard - /redraft to rewrite"
+        if rich:  # the post itself was sent just before, as a rich message
+            return f"Draft above (NOT posted) - topic: {topic}\n\n{controls}"
+        return f"Draft (NOT posted) - topic: {topic}\n\n{text}\n\n{controls}"
+
+    def _publish(self, text):
+        if self.rich:
+            self.api.send_rich_message(self.channel_id, markdown=text)
+        else:
+            self.api.send_message(self.channel_id, text)  
 
     # ---- drafting / posting ----
     def draft(self):
@@ -149,7 +226,7 @@ class Poster:
         if not draft:
             return None
         text, topic, angle = draft
-        self.api.send_message(self.channel_id, text)   # may raise TelegramError
+        self._publish(text)  # may raise TelegramError
         self.state.pop("pending", None)
         self.state["last_post_ts"] = self.now()
         self.state["index"] = self.state.get("index", 0) + 1
@@ -206,7 +283,9 @@ class Poster:
                 self.log("could not generate a usable draft, will retry later")
                 self.retry_at = self.now() + self.retry_seconds
                 return False
-            self.notify(self.draft_message(draft[0], draft[1]))
+            if self.rich:
+                self.notify_rich(draft[0])
+            self.notify(self.draft_message(draft[0], draft[1], rich=self.rich))
         except TelegramError as exc:
             self.log(f"could not send the draft to you: {exc}")
             self.state.pop("pending", None)       # the owner never saw it

@@ -1,16 +1,24 @@
-"""Slash commands typed by the user (work with any model, no tool calling needed)."""
+"""Slash commands used by the terminal and Telegram front-end."""
 
 HELP = """Commands:
+  /start         open the bot menu
+  /help          show all commands
   /ls [folder]   list files in the workspace
-  /read <file>   show a file and attach it to your next questions
+  /read <file>   attach a file to your next questions
   /files         show the workspace folder
-  /clear         drop attached files and this chat's short-term history
-  /help          show this help
-  /exit          quit"""
+  /clear         clear attached files and short-term chat history
+  /preview       generate a channel draft (not published)
+  /approve       publish the waiting draft exactly as reviewed
+  /skip          discard the waiting draft
+  /redraft       replace the waiting draft
+  /post_now      publish now (draft or fresh post)
+  /post_pause    pause scheduled posting
+  /post_resume   resume scheduled posting
+  /post_status   show channel status"""
 
 
 def handle_command(text, files, agent):
-    """Return the text to print, or None if `text` is not a command."""
+    """Return command output, or None when the text is not a known command."""
     if not text.startswith("/"):
         return None
     command, _, argument = text.partition(" ")
@@ -35,8 +43,7 @@ def handle_command(text, files, agent):
         agent.attach(result["path"], result["content"])
         note = " (truncated)" if result["truncated"] else ""
         preview = "\n".join(result["content"].splitlines()[:15])
-        return (f"Attached {result['path']}{note}. Ask your question about it now.\n"
-                f"--- preview ---\n{preview}")
+        return f"Attached {result['path']}{note}. Ask your question about it now.\n--- preview ---\n{preview}"
 
     if command == "/files":
         return f"Workspace: {files.root}"
@@ -46,4 +53,6 @@ def handle_command(text, files, agent):
         agent.history.clear()
         return "Cleared attached files and short-term history."
 
+    if command in {"/start", "/help"}:
+        return HELP
     return HELP
