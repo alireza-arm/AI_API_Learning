@@ -34,6 +34,20 @@ POST_HELP = """Channel posting:
   /post_resume   restart them
   /post_status   show mode and schedule"""
 
+RICH_CHAT_STYLE = """
+Formatting: your reply is shown in Telegram as Rich Markdown.
+- Write clean, well organised answers: short paragraphs separated by a blank line.
+- Put every numbered item on its own line as "1. ", "2. ", ... and every bullet as "- ". Never run several items together in one paragraph.
+- Use **bold** only for a few key terms, never around whole sentences or around every item title.
+- Never use || (it is spoiler syntax). Do not use ==, ~~ or backticks unless you really mean highlight, strikethrough or code.
+- Use a pipe table only to compare 2 or more items on the same attributes: header row, a separator row like |:--|:--|, short cells, never the | character inside a cell.
+- Write formulas as LaTeX: inline $...$ and standalone $$...$$ on their own line; use \\frac for fractions. Never use $ for anything else (write "5 dollars" for prices).
+- For a long optional explanation use <details><summary>Title</summary>, a blank line, the text, a blank line, </details>.
+- Use a "## " heading only for long answers. Short answers are plain paragraphs without a heading.
+- No emojis unless the user uses them. No raw HTML other than the details block.
+- If the user asks for "a few lines", answer in 3 to 6 short lines.
+"""
+
 MAX_MESSAGE = 4000  # Telegram's limit is 4096 characters
 
 
@@ -129,10 +143,11 @@ def check_channel(api, channel_id, bot_id):
 
 class Bot:
     def __init__(self, api, agent, files, allowed_user_id, log=print, sleep=time.sleep,
-                 poll_timeout=10, poster=None):
+                 poll_timeout=10, poster=None, rich_chat=False):
         self.api, self.agent, self.files = api, agent, files
         self.poll_timeout = poll_timeout  # short on purpose: proxies cut long idle waits
         self.poster = poster              # optional channel_poster.Poster
+        self.rich_chat = rich_chat
         self.allowed_user_id = int(allowed_user_id)
         self.log, self.sleep = log, sleep
         self.offset = None
@@ -154,6 +169,7 @@ class Bot:
         command, _, rest = text.partition(" ")
         text = command.split("@")[0] + (" " + rest if rest else "")  # "/ls@mybot" -> "/ls"
         word = text.split()[0] if text.split() else ""
+        rich_reply = False
         if word in ("/start", "/help"):
             output = HELP.replace("  /exit          quit", "").strip()
             if self.poster:
@@ -169,11 +185,22 @@ class Bot:
             self.api.send_typing(chat_id)
             try:
                 output = self.agent.run_turn(text)
+                rich_reply = self.rich_chat
             except Exception as exc:
                 self.log(f"agent error: {type(exc).__name__}")
                 output = "Sorry, something went wrong while answering. Try again."
-        self.api.send_message(chat_id, output)
+        if rich_reply:
+            self.send_rich_reply(chat_id, output)
+        else:
+            self.api.send_message(chat_id, output)
         self.log(f"handled a message, replied in {time.monotonic() - started:.1f}s")  # no content logged
+
+    def send_rich_reply(self, chat_id, text):
+        try:
+            self.api.send_rich_message(chat_id, markdown=text)
+        except TelegramError as exc:  # e.g. Telegram rejected the markup: still answer
+            self.log(f"rich reply rejected ({exc}); sent as plain text")
+            self.api.send_message(chat_id, text)
 
     def handle_post_command(self, command, chat_id):
         if not self.poster:
@@ -288,7 +315,11 @@ def main():
                   f"nothing is published until you send /approve.")
         else:
             print(f"Channel posting: AUTO mode, every {hours:g} h to {channel} ({language}), no review.")
-    bot = Bot(api, agent, files, user_id, poll_timeout=poll_timeout, poster=poster)
+    rich_chat = os.getenv("CHAT_RICH", "off").strip().lower() in ("1", "true", "on", "yes")
+    if rich_chat:
+        agent.system_prompt += RICH_CHAT_STYLE
+        bot = Bot(api, agent, files, user_id, poll_timeout=poll_timeout, poster=poster,
+              rich_chat=rich_chat)
     print(f"Workspace: {files.root}\nBot is running. Message it on Telegram. Press Ctrl+C to stop.")
     try:
         bot.run_forever()

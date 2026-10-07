@@ -20,14 +20,24 @@ GROQ_MODEL = "openai/gpt-oss-20b"
 
 
 def make_client():
-    """LLM_PROVIDER=ollama (default) or groq. Optional: OLLAMA_MODEL in .env."""
+    """LLM_PROVIDER=ollama (default), groq, or 9router.
+    Optional: OLLAMA_MODEL / GROQ_MODEL / ROUTER_MODEL in .env."""
     provider = os.getenv("LLM_PROVIDER", "ollama").lower()
+
     if provider == "groq":
         from groq import Groq
         api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
             raise ValueError("GROQ_API_KEY was not found.")
         return Groq(api_key=api_key), GROQ_MODEL, provider
+
+    if provider == "9router":
+        from openai import OpenAI
+        base_url = os.getenv("NINEROUTER_URL", "http://localhost:20128/v1").strip()
+        api_key = os.getenv("NINEROUTER_KEY", "").strip() or "not-needed"
+        model = os.getenv("ROUTER_MODEL", "claude-sonnet-4-5").strip()
+        return OpenAI(base_url=base_url, api_key=api_key), model, provider
+
     from ollama_client import OllamaClient
     return OllamaClient(), os.getenv("OLLAMA_MODEL", "llama3.2:3b"), provider
 
