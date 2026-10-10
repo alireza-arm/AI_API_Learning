@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-04T13:29:07.945250+00:00",
+  "updated_at": "2026-10-08T06:31:02.972378+00:00",
   "conflicts": [
     {
       "conflict_id": "ecf_f124a56a6c98",
@@ -124,6 +124,136 @@
       "resolution_reason": "safe_identity_match",
       "created_at": "2026-10-04T13:29:07.945203+00:00",
       "updated_at": "2026-10-04T13:29:07.945203+00:00"
+    },
+    {
+      "conflict_id": "ecf_f8755a396d69",
+      "candidate_name": "Abaqus",
+      "candidate_type": "SOFTWARE",
+      "candidate": {
+        "name": "Abaqus",
+        "type": "SOFTWARE",
+        "aliases": [],
+        "description": "A finite element analysis software used for simulating mechanical behavior.",
+        "confidence": 0.9
+      },
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "entity_type": "SOFTWARE",
+      "entity_snapshot": {
+        "entity_id": "ent_586cc0d633a4",
+        "entity_chain_id": "ent_586cc0d633a4",
+        "version": 1,
+        "valid_from": "2026-09-22T12:31:51.129472+00:00",
+        "valid_to": null,
+        "temporal_status": "current",
+        "history": [],
+        "name": "Abaqus",
+        "canonical_name": "abaqus",
+        "type": "SOFTWARE",
+        "aliases": [
+          "Abaqus FEA"
+        ],
+        "description": "Abaqus is a finite element analysis software",
+        "confidence": 0.95,
+        "mention_count": 7,
+        "memory_ids": [
+          "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+          "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
+          "385da6f2-d06a-456e-95fa-948f9ebf04a7",
+          "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
+          "5090d7f9-f979-4211-9de4-139af9711428",
+          "2af91fc1-8a72-49a4-9733-f08f6a911483"
+        ],
+        "identity_resolution_count": 6,
+        "identity_resolution_method": "compatible_core_identity",
+        "identity_resolution_score": 1.0,
+        "first_seen_at": "2026-09-22T12:31:51.500068+00:00",
+        "last_seen_at": "2026-10-08T06:30:53.675034+00:00",
+        "lifecycle_status": "ACTIVE",
+        "lifecycle_score": 0.8974,
+        "archive_state": "ACTIVE",
+        "archived_at": null,
+        "archive_reason": "",
+        "pre_archive_lifecycle_status": "",
+        "created_at": "2026-09-22T12:31:51.500068+00:00",
+        "updated_at": "2026-10-08T06:30:53.675034+00:00"
+      },
+      "decision": "SAME",
+      "status": "RESOLVED",
+      "score": 1.0,
+      "method": "compatible_core_identity",
+      "reason": "The candidate and entity share the same conservative identity core and compatible entity type.",
+      "source_text": "update the memory you saved that i'm working with Abaqus on a project simulating auxetic materials.",
+      "memory_id": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "identity_resolution": {
+        "matched": true,
+        "needs_review": false,
+        "entity_id": "ent_586cc0d633a4",
+        "score": 1.0,
+        "method": "semantic_identity_match",
+        "matched_name": "Abaqus",
+        "ambiguity": false,
+        "best_candidate": {
+          "entity_id": "ent_586cc0d633a4",
+          "entity_name": "Abaqus",
+          "entity_type": "SOFTWARE",
+          "score": 1.0,
+          "method": "semantic_identity_match",
+          "matched_name": "Abaqus",
+          "embedding_score": 1.0
+        },
+        "alternatives": [
+          {
+            "entity_id": "ent_586cc0d633a4",
+            "entity_name": "Abaqus",
+            "entity_type": "SOFTWARE",
+            "score": 1.0,
+            "method": "semantic_identity_match",
+            "matched_name": "Abaqus",
+            "embedding_score": 1.0
+          },
+          {
+            "entity_id": "ent_2b1ac10b3e75",
+            "entity_name": "Project Atlas",
+            "entity_type": "PROJECT",
+            "score": 0.1421,
+            "method": "lexical_token_match",
+            "matched_name": "Project Atlas",
+            "embedding_score": null
+          },
+          {
+            "entity_id": "ent_dd623bc0a3f1",
+            "entity_name": "Alireza",
+            "entity_type": "PERSON",
+            "score": 0.1385,
+            "method": "lexical_token_match",
+            "matched_name": "Alireza",
+            "embedding_score": null
+          },
+          {
+            "entity_id": "ent_4e6e5d1aa22a",
+            "entity_name": "oxidic materials",
+            "entity_type": "DOMAIN",
+            "score": 0.1227,
+            "method": "lexical_token_match",
+            "matched_name": "oxidic materials",
+            "embedding_score": null
+          },
+          {
+            "entity_id": "ent_7f66a1c22615",
+            "entity_name": "SolidWorks",
+            "entity_type": "SOFTWARE",
+            "score": 0.0963,
+            "method": "lexical_token_match",
+            "matched_name": "SolidWorks",
+            "embedding_score": null
+          }
+        ]
+      },
+      "created_entity_id": "",
+      "resolution_reason": "safe_identity_match",
+      "created_at": "2026-10-08T06:27:14.418903+00:00",
+      "updated_at": "2026-10-08T06:31:02.972306+00:00"
     }
   ]
 }

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-04T13:29:07.982836+00:00",
+  "updated_at": "2026-10-08T06:31:03.041123+00:00",
   "resolutions": [
     {
       "resolution_id": "ers_df366edeef78",
@@ -109,6 +109,30 @@
       "source_text": "my name is alireza and i study mechanical engineering REMEBER IT.",
       "memory_id": "d34984af-5a94-4615-b733-fe06b7e9c320",
       "timestamp": "2026-10-04T13:29:07.982822+00:00"
+    },
+    {
+      "resolution_id": "ers_5faee1654a63",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "compatible_core_identity",
+      "action": "LINK",
+      "source_text": "من الان دارم با آباکوس روی پروژه شبیه سازی مواد آگزتیک کار میکنم.",
+      "memory_id": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "timestamp": "2026-10-08T06:27:14.518071+00:00"
+    },
+    {
+      "resolution_id": "ers_f99908527a59",
+      "candidate_name": "Abaqus",
+      "entity_id": "ent_586cc0d633a4",
+      "entity_name": "Abaqus",
+      "score": 1.0,
+      "method": "compatible_core_identity",
+      "action": "LINK",
+      "source_text": "update the memory you saved that i'm working with Abaqus on a project simulating auxetic materials.",
+      "memory_id": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "timestamp": "2026-10-08T06:31:03.041107+00:00"
     }
   ]
 }

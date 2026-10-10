@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-05T05:01:59.014904+00:00",
+  "updated_at": "2026-10-08T06:31:03.212883+00:00",
   "recoveries": [
     {
       "recovery_id": "erc_58f8012b4300",
@@ -16,6 +16,36 @@
       "source_text": "remember that my name is alireza.",
       "memory_id": "ece00864-4fc9-47c1-ac84-22107574e7d0",
       "timestamp": "2026-10-05T05:01:59.014890+00:00"
+    },
+    {
+      "recovery_id": "erc_53ae3f0fca3e",
+      "candidate_name": "oxidic materials",
+      "candidate_type": "DOMAIN",
+      "entity_id": "",
+      "entity_name": "",
+      "decision": "DIFFERENT",
+      "status": "NOT_FOUND",
+      "score": 0.0,
+      "method": "archive_empty",
+      "reason": "No sufficiently plausible archived identity was found.",
+      "source_text": "من الان دارم با آباکوس روی پروژه شبیه سازی مواد آگزتیک کار میکنم.",
+      "memory_id": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "timestamp": "2026-10-08T06:27:14.614526+00:00"
+    },
+    {
+      "recovery_id": "erc_912ab486b046",
+      "candidate_name": "auxetic materials",
+      "candidate_type": "DOMAIN",
+      "entity_id": "",
+      "entity_name": "",
+      "decision": "DIFFERENT",
+      "status": "NOT_FOUND",
+      "score": 0.0,
+      "method": "archive_empty",
+      "reason": "No sufficiently plausible archived identity was found.",
+      "source_text": "update the memory you saved that i'm working with Abaqus on a project simulating auxetic materials.",
+      "memory_id": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "timestamp": "2026-10-08T06:31:03.212861+00:00"
     }
   ]
 }

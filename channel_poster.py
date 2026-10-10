@@ -203,8 +203,10 @@ class Poster:
         return f"Draft (NOT posted) - topic: {topic}\n\n{text}\n\n{controls}"
 
     def _publish(self, text):
+        footer = '\n\n<blockquote expandable><a href="https://t.me/mechanical_engineering_ai">mechanical_engineering_ai</a></blockquote>'
+        full_text = text + footer
         if self.rich:
-            self.api.send_rich_message(self.channel_id, markdown=text)
+            self.api.send_rich_message(self.channel_id, markdown=full_text)
         else:
             self.api.send_message(self.channel_id, text)  
 

@@ -83,15 +83,21 @@ class TelegramAPI:
     def _clean(self, text):
         return str(text).replace(self.token, "<token>")
 
-    def call(self, method, **params):
-        try:
-            response = self.client.post(f"{self.base}/{method}", json=params)
-            data = response.json()
-        except Exception as exc:  # never leak the token (it is part of the URL)
-            raise TelegramError(f"{method} failed: {type(exc).__name__}: {self._clean(exc)}") from None
-        if not data.get("ok"):
-            raise TelegramError(f"{method} failed: {self._clean(data.get('description', 'unknown error'))}")
-        return data["result"]
+    def call(self, method, retries=3, retry_wait=2, **params):
+        last_exc = None
+        for attempt in range(retries):
+            try:
+                response = self.client.post(f"{self.base}/{method}", json=params)
+                data = response.json()
+            except Exception as exc:  # never leak the token (it is part of the URL)
+                last_exc = exc
+                if attempt < retries - 1:
+                    time.sleep(retry_wait * (attempt + 1))
+                    continue
+                raise TelegramError(f"{method} failed: {type(exc).__name__}: {self._clean(exc)}") from None
+            if not data.get("ok"):
+                raise TelegramError(f"{method} failed: {self._clean(data.get('description', 'unknown error'))}")
+            return data["result"]
 
     def get_me(self):
         return self.call("getMe")

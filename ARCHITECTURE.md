@@ -54,7 +54,7 @@ tools (files, Telegram, Gmail). The model decides what to do; code runs the loop
 - `agent_loop_test.py`, `ollama_client_test.py`, `auto_memory_test.py`, `files_test.py`, `telegram_bot_test.py`, `channel_poster_test.py`: offline (fake client/server + fake backend).
   Run: `python -m pytest agent_loop_test.py ollama_client_test.py auto_memory_test.py files_test.py telegram_bot_test.py channel_poster_test.py`
 
-## Planned next
-- Run the bot in the background at Windows start (Task Scheduler)
-- Gmail (read-only OAuth)
-- Move the old analyze_* pipeline into a periodic background job
+## Recent Changes
+- Added OCR fallback for scanned/empty PDFs behind `PDF_OCR=on` flag in `tools_files.py`.
+- Added fixed full-width channel footer (`<blockquote expandable><a href="...">...</a></blockquote>`) appended to every rich post after validation in `channel_poster.py`.
+- Kept ARCHITECTURE.md up to date.

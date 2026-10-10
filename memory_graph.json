@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated_at": "2026-10-05T10:02:07.795100+00:00",
+  "updated_at": "2026-10-08T06:43:29.560284+00:00",
   "nodes": [
     {
       "id": "ent_1bef59173bd6",
@@ -21,7 +21,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.6101,
+      "lifecycle_score": 0.459,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -47,7 +47,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4503,
+      "lifecycle_score": 0.441,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -70,7 +70,30 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.36,
+      "lifecycle_score": 0.3507,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_4e6e5d1aa22a",
+      "kind": "entity",
+      "name": "oxidic materials",
+      "canonical_name": "oxidic materials",
+      "type": "DOMAIN",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "2af91fc1-8a72-49a4-9733-f08f6a911483"
+      ],
+      "entity_chain_id": "ent_4e6e5d1aa22a",
+      "version": 1,
+      "valid_from": "2026-10-08T06:27:04.054475+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.7519,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -81,14 +104,16 @@
       "name": "Abaqus",
       "canonical_name": "abaqus",
       "type": "SOFTWARE",
-      "confidence": 0.9,
-      "mention_count": 6,
+      "confidence": 0.95,
+      "mention_count": 8,
       "memory_ids": [
         "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
         "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
         "385da6f2-d06a-456e-95fa-948f9ebf04a7",
         "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
-        "5090d7f9-f979-4211-9de4-139af9711428"
+        "5090d7f9-f979-4211-9de4-139af9711428",
+        "2af91fc1-8a72-49a4-9733-f08f6a911483",
+        "1585c9e1-73e3-457b-8998-2c4259f320ee"
       ],
       "entity_chain_id": "ent_586cc0d633a4",
       "version": 1,
@@ -97,7 +122,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.4835,
+      "lifecycle_score": 0.909,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -120,7 +145,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3554,
+      "lifecycle_score": 0.3473,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -143,7 +168,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3601,
+      "lifecycle_score": 0.3507,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -166,7 +191,30 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.3554,
+      "lifecycle_score": 0.3473,
+      "archive_state": "ACTIVE",
+      "archived_at": null,
+      "archive_reason": ""
+    },
+    {
+      "id": "ent_cd01fdbbe890",
+      "kind": "entity",
+      "name": "auxetic materials",
+      "canonical_name": "auxetic materials",
+      "type": "DOMAIN",
+      "confidence": 0.9,
+      "mention_count": 1,
+      "memory_ids": [
+        "1585c9e1-73e3-457b-8998-2c4259f320ee"
+      ],
+      "entity_chain_id": "ent_cd01fdbbe890",
+      "version": 1,
+      "valid_from": "2026-10-08T06:31:00.537283+00:00",
+      "valid_to": null,
+      "temporal_status": "current",
+      "history_versions": 0,
+      "lifecycle_status": "ACTIVE",
+      "lifecycle_score": 0.7533,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -189,7 +237,7 @@
       "temporal_status": "current",
       "history_versions": 0,
       "lifecycle_status": "ACTIVE",
-      "lifecycle_score": 0.7608,
+      "lifecycle_score": 0.4398,
       "archive_state": "ACTIVE",
       "archived_at": null,
       "archive_reason": ""
@@ -214,12 +262,40 @@
       "memory": "The user has a todo.txt file.",
       "type": "other",
       "importance": 2,
-      "confidence": 0.82,
+      "confidence": 0.85,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "21b261cd-cc46-49db-ad3a-b1c8cb3f9c97",
       "version": 1,
       "valid_from": "2026-10-04T14:45:26.090654+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "kind": "memory",
+      "memory": "User is working with Abaqus on a project simulating oxidic materials.",
+      "type": "working",
+      "importance": 5,
+      "confidence": 0.93,
+      "status": "archived",
+      "temporal_status": "historical",
+      "chain_id": "3799542f-8055-4007-bd30-a0b5d248068c",
+      "version": 1,
+      "valid_from": "2026-10-08T06:27:04.054475+00:00",
+      "valid_to": "2026-10-08T06:31:00.537283+00:00"
+    },
+    {
+      "id": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "kind": "memory",
+      "memory": "User is working with Abaqus on a project simulating auxetic materials.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "3799542f-8055-4007-bd30-a0b5d248068c",
+      "version": 2,
+      "valid_from": "2026-10-08T06:31:00.537283+00:00",
       "valid_to": null
     },
     {
@@ -234,6 +310,20 @@
       "chain_id": "67650d9b-7b9d-4a02-8601-436778e27e2b",
       "version": 1,
       "valid_from": "2026-09-23T21:50:29.741395+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+      "kind": "memory",
+      "memory": "The user is Alireza.",
+      "type": "learning",
+      "importance": 5,
+      "confidence": 0.99,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "7042e900-0eb2-4aee-a95f-8e4b63f76407",
+      "version": 1,
+      "valid_from": "2026-10-08T06:28:29.119277+00:00",
       "valid_to": null
     },
     {
@@ -256,7 +346,7 @@
       "memory": "User wants to create a notes.txt file with 3 study tips.",
       "type": "other",
       "importance": 1,
-      "confidence": 0.7,
+      "confidence": 0.73,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "7f3caffd-fcf0-4d97-b25c-07d26299165d",
@@ -271,7 +361,7 @@
       "type": "learning",
       "importance": 5,
       "confidence": 0.99,
-      "status": "archived",
+      "status": "active",
       "temporal_status": "historical",
       "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
       "version": 1,
@@ -284,7 +374,7 @@
       "memory": "User uses Abaqus for finite element analysis in mechanical engineering projects.",
       "type": "usage",
       "importance": 5,
-      "confidence": 0.93,
+      "confidence": 0.99,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
@@ -299,11 +389,25 @@
       "type": "learning",
       "importance": 5,
       "confidence": 0.99,
-      "status": "active",
-      "temporal_status": "current",
+      "status": "archived",
+      "temporal_status": "historical",
       "chain_id": "a0e82a23-5c38-4208-a0ad-9948f7e1fe2c",
       "version": 1,
       "valid_from": "2026-10-05T05:01:57.589225+00:00",
+      "valid_to": "2026-10-08T06:28:29.119277+00:00"
+    },
+    {
+      "id": "5f8e1ec9-6a9d-4b57-ae6e-08c24d9d4d6d",
+      "kind": "memory",
+      "memory": "User simulates exotic (آگزتیک) materials in Abaqus, not elastic materials.",
+      "type": "project",
+      "importance": 4,
+      "confidence": 0.93,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "a2e9adc0-9098-4a22-a4c8-ab38c40df5d1",
+      "version": 1,
+      "valid_from": "2026-10-08T06:39:00.112216+00:00",
       "valid_to": null
     },
     {
@@ -368,12 +472,26 @@
       "memory": "User started learning Abaqus.",
       "type": "learning",
       "importance": 5,
-      "confidence": 0.93,
+      "confidence": 0.99,
       "status": "active",
       "temporal_status": "current",
       "chain_id": "e76ae6f2-f21b-4943-a198-ace7498ded55",
       "version": 1,
       "valid_from": "2026-09-23T21:57:37.794254+00:00",
+      "valid_to": null
+    },
+    {
+      "id": "fa34d27b-d890-4d61-a023-7884e6799dd4",
+      "kind": "memory",
+      "memory": "User asked what exotic (آگزتیک) materials are; explained they are materials with unusual mechanical properties such as auxetic behavior, shape‑memory effect, metamaterial structures, high energy absorption, etc.",
+      "type": "fact",
+      "importance": 3,
+      "confidence": 0.8,
+      "status": "active",
+      "temporal_status": "current",
+      "chain_id": "e990eaa0-f876-491e-91b6-1b46f076951e",
+      "version": 1,
+      "valid_from": "2026-10-08T06:39:37.570696+00:00",
       "valid_to": null
     },
     {
@@ -439,7 +557,7 @@
       "target": "ent_586cc0d633a4",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
-      "confidence": 0.9,
+      "confidence": 0.95,
       "evidence": "entity extraction"
     },
     {
@@ -447,7 +565,7 @@
       "target": "ent_586cc0d633a4",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
-      "confidence": 0.9,
+      "confidence": 0.95,
       "evidence": "entity extraction"
     },
     {
@@ -455,7 +573,7 @@
       "target": "ent_586cc0d633a4",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
-      "confidence": 0.9,
+      "confidence": 0.95,
       "evidence": "entity extraction"
     },
     {
@@ -463,7 +581,7 @@
       "target": "ent_586cc0d633a4",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
-      "confidence": 0.9,
+      "confidence": 0.95,
       "evidence": "entity extraction"
     },
     {
@@ -471,7 +589,23 @@
       "target": "ent_586cc0d633a4",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
-      "confidence": 0.9,
+      "confidence": 0.95,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.95,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "target": "ent_586cc0d633a4",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.95,
       "evidence": "entity extraction"
     },
     {
@@ -539,8 +673,24 @@
       "evidence": "entity extraction"
     },
     {
+      "source": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "target": "ent_cd01fdbbe890",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
       "source": "7eecb6f5-8926-4cfd-975b-2f8ca3de6ccd",
       "target": "ent_464c299b178c",
+      "type": "MEMORY_HAS_ENTITY",
+      "relation": "MENTIONS",
+      "confidence": 0.9,
+      "evidence": "entity extraction"
+    },
+    {
+      "source": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "target": "ent_4e6e5d1aa22a",
       "type": "MEMORY_HAS_ENTITY",
       "relation": "MENTIONS",
       "confidence": 0.9,
@@ -577,6 +727,22 @@
       "relation": "REQUIRES",
       "confidence": 0.95,
       "evidence": "Project Atlas requires finite element analysis."
+    },
+    {
+      "source": "ent_586cc0d633a4",
+      "target": "ent_4e6e5d1aa22a",
+      "type": "ENTITY_RELATION",
+      "relation": "USED_FOR",
+      "confidence": 0.9,
+      "evidence": "با آباکوس روی پروژه شبیه سازی مواد آگزتیک کار میکنم"
+    },
+    {
+      "source": "ent_586cc0d633a4",
+      "target": "ent_cd01fdbbe890",
+      "type": "ENTITY_RELATION",
+      "relation": "USED_FOR",
+      "confidence": 0.9,
+      "evidence": "working with Abaqus on a project simulating auxetic materials"
     },
     {
       "source": "a7d59355-09b0-488f-bd27-b879dae69e11",
@@ -659,20 +825,60 @@
       "evidence": "temporal_change"
     },
     {
-      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
-      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "source": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+      "target": "ece00864-4fc9-47c1-ac84-22107574e7d0",
       "type": "DERIVED_FROM",
       "relation": "DERIVED_FROM",
       "confidence": 1.0,
       "evidence": "memory derivation metadata"
     },
     {
-      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
-      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "source": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+      "target": "ece00864-4fc9-47c1-ac84-22107574e7d0",
       "type": "DERIVED_FROM",
       "relation": "PROVENANCE_RELATED",
       "confidence": 1.0,
-      "evidence": "User explicitly states their name."
+      "evidence": "User explicitly stated their name."
+    },
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
+      "target": "5090d7f9-f979-4211-9de4-139af9711428",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "linked_to_new_version"
+    },
+    {
+      "source": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "target": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDES",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "target": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "target": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "temporal_change"
     },
     {
       "source": "ab513c94-1b0f-4307-9f2e-fc9a12e0f40e",
@@ -691,22 +897,6 @@
       "evidence": "User indicated they started using Abaqus for Project Atlas on 2026-09-21."
     },
     {
-      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
-      "target": "5090d7f9-f979-4211-9de4-139af9711428",
-      "type": "TEMPORAL_SUPERSEDES",
-      "relation": "SUPERSEDED_BY",
-      "confidence": 1.0,
-      "evidence": "temporal version metadata"
-    },
-    {
-      "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
-      "target": "5090d7f9-f979-4211-9de4-139af9711428",
-      "type": "DERIVED_FROM",
-      "relation": "PROVENANCE_RELATED",
-      "confidence": 1.0,
-      "evidence": "linked_to_new_version"
-    },
-    {
       "source": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
       "target": "d34984af-5a94-4615-b733-fe06b7e9c320",
       "type": "TEMPORAL_SUPERSEDES",
@@ -771,6 +961,54 @@
       "evidence": "User explicitly states their name."
     },
     {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "DERIVED_FROM",
+      "relation": "DERIVED_FROM",
+      "confidence": 1.0,
+      "evidence": "memory derivation metadata"
+    },
+    {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "273b2579-4671-4e52-926f-0ac674d9a438",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User explicitly states their name."
+    },
+    {
+      "source": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+      "target": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "User explicitly stated their name."
+    },
+    {
+      "source": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "target": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "type": "TEMPORAL_SUPERSEDES",
+      "relation": "SUPERSEDED_BY",
+      "confidence": 1.0,
+      "evidence": "temporal version metadata"
+    },
+    {
+      "source": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "target": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+      "type": "DERIVED_FROM",
+      "relation": "PROVENANCE_RELATED",
+      "confidence": 1.0,
+      "evidence": "linked_to_new_version"
+    },
+    {
       "source": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
       "target": "5090d7f9-f979-4211-9de4-139af9711428",
       "type": "TEMPORAL_SAME_CHAIN",
@@ -781,6 +1019,14 @@
     {
       "source": "f9f60c4e-f644-4deb-9832-81d6cdf36aa9",
       "target": "d34984af-5a94-4615-b733-fe06b7e9c320",
+      "type": "TEMPORAL_SAME_CHAIN",
+      "relation": "NEXT_VERSION",
+      "confidence": 1.0,
+      "evidence": "shared temporal chain"
+    },
+    {
+      "source": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+      "target": "1585c9e1-73e3-457b-8998-2c4259f320ee",
       "type": "TEMPORAL_SAME_CHAIN",
       "relation": "NEXT_VERSION",
       "confidence": 1.0,

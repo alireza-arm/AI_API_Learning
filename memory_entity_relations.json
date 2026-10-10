@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-23T21:57:40.987899+00:00",
+  "updated_at": "2026-10-08T06:31:04.895270+00:00",
   "relations": [
     {
       "relation_id": "rel_0ed52276c86192de",
@@ -27,6 +27,32 @@
       "status": "active",
       "created_at": "2026-09-23T21:57:40.945573+00:00",
       "updated_at": "2026-09-23T21:57:40.987863+00:00"
+    },
+    {
+      "relation_id": "rel_621b38ca69306971",
+      "source_entity_id": "ent_586cc0d633a4",
+      "target_entity_id": "ent_4e6e5d1aa22a",
+      "relation": "USED_FOR",
+      "directed": true,
+      "confidence": 0.9,
+      "evidence": "با آباکوس روی پروژه شبیه سازی مواد آگزتیک کار میکنم",
+      "memory_ids": [],
+      "status": "active",
+      "created_at": "2026-10-08T06:27:16.561809+00:00",
+      "updated_at": "2026-10-08T06:27:16.631619+00:00"
+    },
+    {
+      "relation_id": "rel_8adb630092e6af22",
+      "source_entity_id": "ent_586cc0d633a4",
+      "target_entity_id": "ent_cd01fdbbe890",
+      "relation": "USED_FOR",
+      "directed": true,
+      "confidence": 0.9,
+      "evidence": "working with Abaqus on a project simulating auxetic materials",
+      "memory_ids": [],
+      "status": "active",
+      "created_at": "2026-10-08T06:31:04.770863+00:00",
+      "updated_at": "2026-10-08T06:31:04.895248+00:00"
     }
   ]
 }

@@ -43,61 +43,6 @@
         "archive_reason": "consolidated_into"
     },
     {
-        "memory": "User uses Abaqus for finite element analysis.",
-        "type": "learning",
-        "importance": 5,
-        "confidence": 0.99,
-        "created_at": "2026-09-22T12:31:51.129472+00:00",
-        "updated_at": "2026-09-23T21:58:22.629065+00:00",
-        "last_accessed": "2026-09-23T21:58:16.777131+00:00",
-        "access_count": 8,
-        "status": "archived",
-        "memory_id": "1f8268b7-4ddb-4f7f-b29c-7c6c1e5c9a60",
-        "chain_id": "9954bd27-449b-4720-8daa-ff5389b5ac09",
-        "version": 1,
-        "valid_from": "2026-09-23T21:42:48.895044+00:00",
-        "valid_to": "2026-09-23T21:58:22.433615+00:00",
-        "supersedes": null,
-        "superseded_by": "5090d7f9-f979-4211-9de4-139af9711428",
-        "temporal_status": "historical",
-        "derived_from": [
-            "5c66f64a-b514-4677-9384-4f70a8af180d"
-        ],
-        "provenance": [
-            {
-                "timestamp": "2026-09-23T21:42:48.895355+00:00",
-                "action": "CONSOLIDATE",
-                "event": "CHANGE",
-                "reason": "User explicitly states they use Abaqus FEA for structural analysis.",
-                "source_text": "من از Abaqus FEA برای تحلیل سازه استفاده می‌کنم.",
-                "related_memory_ids": [
-                    "5c66f64a-b514-4677-9384-4f70a8af180d"
-                ]
-            },
-            {
-                "timestamp": "2026-09-23T21:58:22.434576+00:00",
-                "action": "SUPERSEDE",
-                "event": "CHANGE",
-                "reason": "conflict_replaced",
-                "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
-                "related_memory_ids": []
-            },
-            {
-                "timestamp": "2026-09-23T21:58:22.629049+00:00",
-                "action": "SUPERSEDED_BY",
-                "event": "CHANGE",
-                "reason": "linked_to_new_version",
-                "source_text": "I use Abaqus for finite element analysis in my mechanical engineering projects.",
-                "related_memory_ids": [
-                    "5090d7f9-f979-4211-9de4-139af9711428"
-                ]
-            }
-        ],
-        "causal_links": [],
-        "archived_at": "2026-09-23T21:58:22.434560+00:00",
-        "archive_reason": "conflict_replaced"
-    },
-    {
         "memory": "User has a temporary test project called Archive Test Project.",
         "type": "learning",
         "importance": 5,
@@ -278,5 +223,103 @@
         "causal_links": [],
         "archived_at": "2026-10-05T05:01:57.589225+00:00",
         "archive_reason": "consolidated_into"
+    },
+    {
+        "memory": "The user is Alireza.",
+        "type": "learning",
+        "importance": 5,
+        "confidence": 0.99,
+        "created_at": "2026-10-04T14:12:12.042198+00:00",
+        "updated_at": "2026-10-08T06:28:29.119277+00:00",
+        "last_accessed": "2026-10-08T06:28:25.048177+00:00",
+        "access_count": 46,
+        "status": "archived",
+        "memory_id": "ece00864-4fc9-47c1-ac84-22107574e7d0",
+        "chain_id": "a0e82a23-5c38-4208-a0ad-9948f7e1fe2c",
+        "version": 1,
+        "valid_from": "2026-10-05T05:01:57.589225+00:00",
+        "valid_to": "2026-10-08T06:28:29.119277+00:00",
+        "supersedes": null,
+        "superseded_by": "aefa1fe2-b608-4522-8510-317a2c1a04fc",
+        "temporal_status": "historical",
+        "derived_from": [
+            "273b2579-4671-4e52-926f-0ac674d9a438"
+        ],
+        "provenance": [
+            {
+                "timestamp": "2026-10-05T05:01:57.589260+00:00",
+                "action": "CONSOLIDATE",
+                "event": "CHANGE",
+                "reason": "User explicitly states their name.",
+                "source_text": "remember that my name is alireza.",
+                "related_memory_ids": [
+                    "273b2579-4671-4e52-926f-0ac674d9a438"
+                ]
+            },
+            {
+                "timestamp": "2026-10-08T06:28:29.119484+00:00",
+                "action": "CONSOLIDATED_INTO",
+                "event": "CHANGE",
+                "reason": "User explicitly stated their name.",
+                "source_text": "پس ذخیره کن که اسمم علیرضا است.",
+                "related_memory_ids": [
+                    "aefa1fe2-b608-4522-8510-317a2c1a04fc"
+                ]
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-10-08T06:28:29.119277+00:00",
+        "archive_reason": "consolidated_into"
+    },
+    {
+        "memory": "User is working with Abaqus on a project simulating oxidic materials.",
+        "type": "working",
+        "importance": 5,
+        "confidence": 0.93,
+        "created_at": "2026-10-08T06:27:04.054475+00:00",
+        "updated_at": "2026-10-08T06:31:01.140768+00:00",
+        "last_accessed": "2026-10-08T06:30:54.041260+00:00",
+        "access_count": 1,
+        "status": "archived",
+        "memory_id": "2af91fc1-8a72-49a4-9733-f08f6a911483",
+        "chain_id": "3799542f-8055-4007-bd30-a0b5d248068c",
+        "version": 1,
+        "valid_from": "2026-10-08T06:27:04.054475+00:00",
+        "valid_to": "2026-10-08T06:31:00.537283+00:00",
+        "supersedes": null,
+        "superseded_by": "1585c9e1-73e3-457b-8998-2c4259f320ee",
+        "temporal_status": "historical",
+        "derived_from": [],
+        "provenance": [
+            {
+                "timestamp": "2026-10-08T06:27:04.054535+00:00",
+                "action": "ADD",
+                "event": "START",
+                "reason": "User states they are currently working with Abaqus on a project simulating oxidic materials.",
+                "source_text": "من الان دارم با آباکوس روی پروژه شبیه سازی مواد آگزتیک کار میکنم.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-10-08T06:31:00.608678+00:00",
+                "action": "SUPERSEDE",
+                "event": "CHANGE",
+                "reason": "conflict_replaced",
+                "source_text": "update the memory you saved that i'm working with Abaqus on a project simulating auxetic materials.",
+                "related_memory_ids": []
+            },
+            {
+                "timestamp": "2026-10-08T06:31:01.140747+00:00",
+                "action": "SUPERSEDED_BY",
+                "event": "CHANGE",
+                "reason": "linked_to_new_version",
+                "source_text": "update the memory you saved that i'm working with Abaqus on a project simulating auxetic materials.",
+                "related_memory_ids": [
+                    "1585c9e1-73e3-457b-8998-2c4259f320ee"
+                ]
+            }
+        ],
+        "causal_links": [],
+        "archived_at": "2026-10-08T06:31:00.608621+00:00",
+        "archive_reason": "conflict_replaced"
     }
 ]
